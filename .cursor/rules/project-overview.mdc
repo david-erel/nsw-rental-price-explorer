@@ -1,0 +1,66 @@
+---
+description: Project overview and architecture for the NSW Rental Bond Explorer
+alwaysApply: true
+---
+
+# NSW Rental Bond Explorer
+
+Single-page data explorer for NSW rental bond lodgement data, built with React, TypeScript, Vite, and Tailwind CSS v4.
+
+## Tech stack
+
+- **Runtime**: React 19 + TypeScript 5.9
+- **Build**: Vite 6 with `@vitejs/plugin-react`
+- **Styling**: Tailwind CSS 4.2 via `@tailwindcss/vite` plugin (no `tailwind.config.js` — v4 uses CSS-based config)
+- **Package manager**: pnpm 9.12
+
+No routing library, no state management library, no component library. All UI components are built from scratch.
+
+## File structure
+
+```
+src/
+  main.tsx          # React entry point (renders <App />)
+  App.tsx           # All components and app logic (~680 lines)
+  App.css           # @import "tailwindcss" + minimal custom CSS
+  types.ts          # TypeScript interfaces and constants
+public/
+  rental-bonds.json # Dataset: 29,616 records, ~3.1 MB
+index.html          # HTML shell
+vite.config.js      # Vite + React + Tailwind plugins
+```
+
+## Data source
+
+NSW Fair Trading Rental Bond Lodgements (January 2025), converted from XLSX to JSON. Each record has: `lodgementDate` (string), `postcode` (number), `dwellingType` (string: F/H/T/O/R/U), `bedrooms` (number | null), `weeklyRent` (number). Loaded via `fetch("/rental-bonds.json")` on mount.
+
+## Architecture (src/App.tsx)
+
+Everything lives in one file. Three inline sub-components + the main App component:
+
+- **MultiSelect** — Custom dropdown with checkboxes for multi-select. Uses `useRef` + `mousedown` listener for outside-click-to-close.
+- **TagInput** — Text input that converts typed values into removable tag pills on Enter/comma.
+- **RangeSlider** — Dual-handle range slider using two overlaid `<input type="range">` elements.
+
+**App state**: `data`, `filters`, `filtersOpen`, `groupBy`, `page`, `sortField`, `sortDir`, `expandedGroups`.
+
+**Key computed values (useMemo)**: `filtered` -> `sorted` -> `grouped`, plus `stats`, `hasActiveFilters`, `filterSummary`.
+
+## Styling approach
+
+- ~95% Tailwind utility classes inline in JSX
+- `src/App.css` contains only `@import "tailwindcss"` plus custom CSS for things Tailwind cannot express: range slider vendor pseudo-elements (`::-webkit-slider-thumb`), spinner keyframe animation, collapse open/closed states, multi-select compound selectors
+- Color palette uses Tailwind defaults: indigo-600 as accent, gray-50/100/200/500/700/900 for neutrals
+- Panels use `bg-gray-50 border border-gray-200 rounded-xl shadow-sm`; dashboard tiles use `bg-indigo-50 border border-indigo-100`; table header is `bg-indigo-50`; table rows are zebra-striped
+
+## Dev server notes
+
+- Vite HMR does **not** work with this Google Drive-synced workspace path. After code changes, kill and restart the dev server.
+- Use `pnpm cleanup` to kill any stale Vite processes on ports 5173–5178, then `pnpm dev` to start fresh.
+
+## Conventions
+
+- No external component or UI libraries — build custom components
+- Keep all components in `src/App.tsx` unless extracting to a separate file is explicitly requested
+- Use Tailwind utility classes for styling; only add custom CSS in `App.css` when Tailwind cannot express it (vendor pseudo-elements, keyframe animations, compound state selectors)
+- Types and constants go in `src/types.ts`
