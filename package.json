@@ -12,9 +12,11 @@
     "download-all": "tsx scripts/download-all.ts"
   },
   "dependencies": {
+    "lucide-react": "^0.576.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^3.7.0",
+    "usehooks-ts": "^3.1.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

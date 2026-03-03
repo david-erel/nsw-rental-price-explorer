@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Configure dark mode to use the .dark class on the html element */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ── Collapse animation (needs open/closed state classes) ── */
 
 .filters-body {
@@ -74,6 +77,16 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
+/* ── Dark mode range slider thumb ── */
+
+.dark .range-slider-inputs input[type="range"]::-webkit-slider-thumb {
+  background: #1f2937;
+}
+
+.dark .range-slider-inputs input[type="range"]::-moz-range-thumb {
+  background: #1f2937;
+}
+
 /* ── Spinner ── */
 
 @keyframes spin {
@@ -90,4 +103,19 @@
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin-bottom: 12px;
+}
+
+.dark .spinner {
+  border-color: #374151;
+  border-top-color: var(--color-indigo-500);
+}
+
+/* ── Dark mode chart overrides ── */
+
+.dark .recharts-cartesian-grid line {
+  stroke: #374151;
+}
+
+.dark .recharts-text {
+  fill: #9ca3af;
 }

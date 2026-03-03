@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Sun, Moon, Monitor, ChevronDown } from "lucide-react";
 import type { RentalBond, Filters, GroupByField } from "./types";
 import { DWELLING_TYPE_LABELS, BEDROOM_OPTIONS, MONTH_CATALOG } from "./types";
 import * as XLSX from "xlsx";
@@ -31,6 +32,15 @@ type SortField =
   | "bedrooms"
   | "weeklyRent";
 type SortDir = "asc" | "desc";
+type ThemeMode = "light" | "dark" | "system";
+
+const THEME_STORAGE_KEY = "nsw-explorer-theme";
+
+function applyDarkClass(mode: ThemeMode) {
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const isDark = mode === "dark" || (mode === "system" && prefersDark);
+  document.documentElement.classList.toggle("dark", isDark);
+}
 
 function median(arr: number[]): number {
   const sorted = [...arr].sort((a, b) => a - b);
@@ -247,7 +257,7 @@ function MultiSelect({
   return (
     <div className={`multi-select relative ${open ? "open" : ""}`} ref={ref}>
       <div
-        className="multi-select-trigger flex items-center justify-between w-full min-h-[34px] px-3 py-1 border border-gray-300 rounded-lg bg-white cursor-pointer text-sm text-gray-900 transition-colors select-none hover:border-gray-400"
+        className="multi-select-trigger flex items-center justify-between w-full min-h-[34px] px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 cursor-pointer text-sm text-gray-900 dark:text-gray-100 transition-colors select-none hover:border-gray-400 dark:hover:border-gray-500"
         onClick={() => setOpen((o) => !o)}
       >
         {displayText ? (
@@ -255,18 +265,18 @@ function MultiSelect({
             {displayText}
           </span>
         ) : (
-          <span className="text-gray-400">{placeholder}</span>
+          <span className="text-gray-400 dark:text-gray-500">{placeholder}</span>
         )}
-        <span className="arrow ml-2 text-[0.6rem] text-gray-400 transition-transform">
+        <span className="arrow ml-2 text-[0.6rem] text-gray-400 dark:text-gray-500 transition-transform">
           &#9660;
         </span>
       </div>
       {open && (
-        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto p-1">
+        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto p-1">
           {options.map((opt) => (
             <label
               key={opt.value}
-              className="flex items-center gap-2 px-2.5 py-2 rounded-md cursor-pointer text-sm transition-colors select-none hover:bg-gray-100"
+              className="flex items-center gap-2 px-2.5 py-2 rounded-md cursor-pointer text-sm text-gray-900 dark:text-gray-100 transition-colors select-none hover:bg-gray-100 dark:hover:bg-gray-700"
               onClick={() => toggle(opt.value)}
             >
               <input
@@ -320,17 +330,17 @@ function TagInput({
 
   return (
     <div
-      className="flex flex-wrap gap-1.5 px-2.5 py-1 border border-gray-300 rounded-lg bg-white min-h-[34px] items-center cursor-text transition-colors focus-within:border-indigo-600 focus-within:ring-3 focus-within:ring-indigo-600/10"
+      className="flex flex-wrap gap-1.5 px-2.5 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 min-h-[34px] items-center cursor-text transition-colors focus-within:border-indigo-600 focus-within:ring-3 focus-within:ring-indigo-600/10"
       onClick={() => inputRef.current?.focus()}
     >
       {tags.map((tag) => (
         <span
           key={tag}
-          className="inline-flex items-center gap-1 px-2 py-px bg-indigo-50 text-indigo-600 border border-indigo-200 rounded text-xs font-medium whitespace-nowrap"
+          className="inline-flex items-center gap-1 px-2 py-px bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded text-xs font-medium whitespace-nowrap"
         >
           {tag}
           <button
-            className="flex items-center justify-center bg-transparent border-none text-indigo-400 cursor-pointer text-base leading-none p-0 ml-0.5 rounded-sm w-4 h-4 hover:text-indigo-700 hover:bg-indigo-200"
+            className="flex items-center justify-center bg-transparent border-none text-indigo-400 dark:text-indigo-500 cursor-pointer text-base leading-none p-0 ml-0.5 rounded-sm w-4 h-4 hover:text-indigo-700 hover:bg-indigo-200 dark:hover:text-indigo-300 dark:hover:bg-indigo-800"
             onClick={(e) => {
               e.stopPropagation();
               onChange(tags.filter((t) => t !== tag));
@@ -350,7 +360,7 @@ function TagInput({
         onKeyDown={handleKeyDown}
         onBlur={addTag}
         placeholder={tags.length === 0 ? placeholder : ""}
-        className="border-none outline-none text-sm flex-1 min-w-[80px] py-0.5 bg-transparent text-gray-900 placeholder:text-gray-400"
+        className="border-none outline-none text-sm flex-1 min-w-[80px] py-0.5 bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
       />
     </div>
   );
@@ -394,7 +404,7 @@ function RangeSlider({
 
   return (
     <div className="py-0.5">
-      <div className="relative h-1.5 bg-gray-200 rounded-full my-2.5">
+      <div className="relative h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full my-2.5">
         <div
           className="absolute h-full bg-indigo-600 rounded-full"
           style={{ left: `${leftPct}%`, width: `${rightPct - leftPct}%` }}
@@ -426,7 +436,7 @@ function RangeSlider({
             : formatCurrency(valueMax)}
         </span>
       </div>
-      <div className="flex justify-between text-[0.65rem] text-gray-400 mt-px">
+      <div className="flex justify-between text-[0.65rem] text-gray-400 dark:text-gray-500 mt-px">
         <span>{formatCurrency(min)}</span>
         <span>{formatCurrency(max)}</span>
       </div>
@@ -560,7 +570,7 @@ function HistogramChart({ bins, groupKeys, groupBy }: HistogramChartProps) {
 
   return (
     <div ref={containerRef}>
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">Rent Distribution</h3>
+      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Rent Distribution</h3>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
@@ -678,7 +688,7 @@ function BubbleMatrix({ bins, groupKeys, groupBy }: BubbleMatrixProps) {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">Rent vs Category Bubble Matrix</h3>
+      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Rent vs Category Bubble Matrix</h3>
       <ResponsiveContainer width="100%" height={Math.max(200, groupKeys.length * 44 + 80)}>
         <ScatterChart margin={{ top: 8, right: 24, left: 8, bottom: 60 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -734,6 +744,60 @@ function BubbleMatrix({ bins, groupKeys, groupBy }: BubbleMatrixProps) {
   );
 }
 
+// ── Theme Dropdown ──
+
+const THEME_OPTIONS: { value: ThemeMode; label: string; icon: React.ReactNode }[] = [
+  { value: "light", label: "Light", icon: <Sun size={14} /> },
+  { value: "dark",  label: "Dark",  icon: <Moon size={14} /> },
+  { value: "system", label: "System", icon: <Monitor size={14} /> },
+];
+
+function ThemeDropdown({ mode, onChange }: { mode: ThemeMode; onChange: (m: ThemeMode) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const current = THEME_OPTIONS.find((o) => o.value === mode)!;
+
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-colors cursor-pointer text-sm font-medium"
+      >
+        {current.icon}
+        <span>{current.label}</span>
+        <ChevronDown size={12} className={`ml-0.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+6px)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 py-1 min-w-[130px]">
+          {THEME_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-left transition-colors cursor-pointer ${
+                mode === opt.value
+                  ? "text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-950/60"
+                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              }`}
+            >
+              {opt.icon}
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main App ──
 
 export default function App() {
@@ -759,6 +823,25 @@ export default function App() {
   const [pageSize, setPageSize] = useState(10);
   const [viewTab, setViewTab] = useState<"table" | "graphs">("table");
   const abortRef = useRef<AbortController | null>(null);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode | null;
+    return stored ?? "system";
+  });
+
+  // Re-apply when system preference changes (only relevant in "system" mode)
+  useEffect(() => {
+    if (themeMode !== "system") return;
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => applyDarkClass("system");
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [themeMode]);
+
+  function handleThemeChange(mode: ThemeMode) {
+    applyDarkClass(mode);                          // synchronous DOM update
+    localStorage.setItem(THEME_STORAGE_KEY, mode);
+    setThemeMode(mode);
+  }
 
   useEffect(() => {
     async function init() {
@@ -1097,31 +1180,31 @@ export default function App() {
           <thead>
             <tr>
               <th
-                className={`sticky top-0 bg-indigo-50 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 cursor-pointer select-none transition-colors hover:text-indigo-600 ${sortField === "lodgementDate" ? "text-indigo-600" : "text-gray-500"}`}
+                className={`sticky top-0 bg-indigo-50 dark:bg-indigo-950 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 dark:border-indigo-900 cursor-pointer select-none transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 ${sortField === "lodgementDate" ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400"}`}
                 onClick={() => toggleSort("lodgementDate")}
               >
                 Date{sortIndicator("lodgementDate")}
               </th>
               <th
-                className={`sticky top-0 bg-indigo-50 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 cursor-pointer select-none transition-colors hover:text-indigo-600 ${sortField === "postcode" ? "text-indigo-600" : "text-gray-500"}`}
+                className={`sticky top-0 bg-indigo-50 dark:bg-indigo-950 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 dark:border-indigo-900 cursor-pointer select-none transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 ${sortField === "postcode" ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400"}`}
                 onClick={() => toggleSort("postcode")}
               >
                 Postcode{sortIndicator("postcode")}
               </th>
               <th
-                className={`sticky top-0 bg-indigo-50 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 cursor-pointer select-none transition-colors hover:text-indigo-600 ${sortField === "dwellingType" ? "text-indigo-600" : "text-gray-500"}`}
+                className={`sticky top-0 bg-indigo-50 dark:bg-indigo-950 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 dark:border-indigo-900 cursor-pointer select-none transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 ${sortField === "dwellingType" ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400"}`}
                 onClick={() => toggleSort("dwellingType")}
               >
                 Type{sortIndicator("dwellingType")}
               </th>
               <th
-                className={`sticky top-0 bg-indigo-50 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 cursor-pointer select-none transition-colors hover:text-indigo-600 ${sortField === "bedrooms" ? "text-indigo-600" : "text-gray-500"}`}
+                className={`sticky top-0 bg-indigo-50 dark:bg-indigo-950 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 dark:border-indigo-900 cursor-pointer select-none transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 ${sortField === "bedrooms" ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400"}`}
                 onClick={() => toggleSort("bedrooms")}
               >
                 Beds{sortIndicator("bedrooms")}
               </th>
               <th
-                className={`sticky top-0 bg-indigo-50 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 cursor-pointer select-none transition-colors hover:text-indigo-600 ${sortField === "weeklyRent" ? "text-indigo-600" : "text-gray-500"}`}
+                className={`sticky top-0 bg-indigo-50 dark:bg-indigo-950 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 dark:border-indigo-900 cursor-pointer select-none transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 ${sortField === "weeklyRent" ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400"}`}
                 onClick={() => toggleSort("weeklyRent")}
               >
                 Weekly Rent{sortIndicator("weeklyRent")}
@@ -1132,25 +1215,25 @@ export default function App() {
             {pageItems.map((r, i) => (
               <tr
                 key={start + i}
-                className={`hover:bg-indigo-50/50 ${(start + i) % 2 === 0 ? "bg-white" : "bg-gray-50/70"}`}
+                className={`hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 ${(start + i) % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50/70 dark:bg-gray-800/50"}`}
               >
-                <td className="px-4 py-2.5 text-sm border-b border-gray-100">
+                <td className="px-4 py-2.5 text-sm border-b border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300">
                   {r.lodgementDate}
                 </td>
-                <td className="px-4 py-2.5 text-sm border-b border-gray-100">
+                <td className="px-4 py-2.5 text-sm border-b border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300">
                   {r.postcode}
                 </td>
-                <td className="px-4 py-2.5 text-sm border-b border-gray-100">
+                <td className="px-4 py-2.5 text-sm border-b border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300">
                   {DWELLING_TYPE_LABELS[r.dwellingType] ?? r.dwellingType}
                 </td>
-                <td className="px-4 py-2.5 text-sm border-b border-gray-100">
+                <td className="px-4 py-2.5 text-sm border-b border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300">
                   {r.bedrooms == null
                     ? "–"
                     : r.bedrooms === 0
                       ? "Studio"
                       : r.bedrooms}
                 </td>
-                <td className="px-4 py-2.5 text-sm border-b border-gray-100 font-semibold tabular-nums">
+                <td className="px-4 py-2.5 text-sm border-b border-gray-100 dark:border-gray-800 font-semibold tabular-nums text-gray-900 dark:text-gray-100">
                   {formatCurrency(r.weeklyRent)}/wk
                 </td>
               </tr>
@@ -1158,25 +1241,25 @@ export default function App() {
           </tbody>
         </table>
         {paginate && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
             <div className="w-28" />
             <div className="flex items-center gap-2">
               <button
                 disabled={page === 0}
                 onClick={() => setPage((p) => p - 1)}
-                className="px-3 py-1.5 border border-gray-300 rounded-md bg-white text-sm cursor-pointer transition-colors hover:enabled:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm cursor-pointer transition-colors hover:enabled:bg-gray-100 dark:hover:enabled:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Previous
               </button>
               {totalPages > 1 && (
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
                   Page {page + 1} of {totalPages}
                 </span>
               )}
               <button
                 disabled={page >= totalPages - 1}
                 onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1.5 border border-gray-300 rounded-md bg-white text-sm cursor-pointer transition-colors hover:enabled:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm cursor-pointer transition-colors hover:enabled:bg-gray-100 dark:hover:enabled:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Next
               </button>
@@ -1185,13 +1268,13 @@ export default function App() {
               <select
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="appearance-none pl-3 pr-7 py-1.5 border border-gray-300 rounded-lg bg-white text-sm text-gray-700 cursor-pointer transition-colors hover:border-gray-400 focus:outline-none focus:border-indigo-600"
+                className="appearance-none pl-3 pr-7 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 cursor-pointer transition-colors hover:border-gray-400 dark:hover:border-gray-500 focus:outline-none focus:border-indigo-600"
               >
                 <option value={10}>10 rows</option>
                 <option value={20}>20 rows</option>
                 <option value={50}>50 rows</option>
               </select>
-              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[0.6rem] text-gray-400">&#9660;</span>
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[0.6rem] text-gray-400 dark:text-gray-500">&#9660;</span>
             </div>
           </div>
         )}
@@ -1207,7 +1290,7 @@ export default function App() {
 
   if (loading)
     return (
-      <div className="flex flex-col items-center justify-center min-h-[300px] text-gray-500">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-white dark:bg-gray-950 text-gray-500 dark:text-gray-400">
         <div className="spinner" />
         Loading rental bond data...
       </div>
@@ -1227,30 +1310,34 @@ export default function App() {
 
   return (
     <>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
       <div className="max-w-5xl mx-auto px-4 py-6">
         <header className="mb-6">
-          <div className="flex items-center gap-3 mb-0.5">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-600 shadow-sm shrink-0">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                className="w-6 h-6 text-white"
-              >
-                <path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z" />
-                <path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a1.03 1.03 0 0 0 .091-.086L12 5.432Z" />
-              </svg>
+          <div className="flex items-center justify-between gap-3 mb-0.5">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-600 shadow-sm shrink-0">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="w-6 h-6 text-white"
+                >
+                  <path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z" />
+                  <path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a1.03 1.03 0 0 0 .091-.086L12 5.432Z" />
+                </svg>
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                NSW Rental Price Explorer
+              </h1>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              NSW Rental Price Explorer
-            </h1>
+            <ThemeDropdown mode={themeMode} onChange={handleThemeChange} />
           </div>
-          <div className="text-gray-500 text-sm mt-1 flex items-center gap-1.5 flex-wrap">
+          <div className="text-gray-500 dark:text-gray-400 text-sm mt-1 flex items-center gap-1.5 flex-wrap">
             <span>Bond lodgements from</span>
             <select
               value={selectedMonth}
               onChange={(e) => handleMonthChange(e.target.value)}
-              className="text-indigo-600 font-semibold bg-indigo-50 border border-indigo-200 rounded px-2 py-0.5 text-sm cursor-pointer focus:outline-none focus:border-indigo-600"
+              className="text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded px-2 py-0.5 text-sm cursor-pointer focus:outline-none focus:border-indigo-600"
             >
               {MONTH_CATALOG.filter(
                 (m) => import.meta.env.DEV || localMonths.has(m.key),
@@ -1284,29 +1371,29 @@ export default function App() {
         </header>
 
         {error && data.length > 0 && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center justify-between">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 rounded-lg text-red-700 dark:text-red-400 text-sm flex items-center justify-between">
             <span>{error}</span>
             <button
               onClick={() => setError(null)}
-              className="text-red-400 hover:text-red-700 text-lg leading-none px-1 cursor-pointer"
+              className="text-red-400 hover:text-red-700 dark:hover:text-red-300 text-lg leading-none px-1 cursor-pointer"
             >
               &times;
             </button>
           </div>
         )}
 
-        <div className="bg-gray-50 rounded-xl mb-5 shadow-sm border border-gray-200">
+        <div className="bg-white dark:bg-gray-900 rounded-xl mb-5 shadow-sm border border-gray-200 dark:border-gray-700">
           <div
-            className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none transition-colors hover:bg-gray-100"
+            className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl"
             onClick={() => setFiltersOpen((o) => !o)}
           >
             <div className="flex items-center gap-2.5">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 Filters
               </h2>
               {hasActiveFilters && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400" />
                   Active
                 </span>
               )}
@@ -1314,7 +1401,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               {hasActiveFilters && (
                 <button
-                  className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-700 text-sm cursor-pointer transition-colors hover:bg-gray-100"
+                  className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
                   onClick={(e) => {
                     e.stopPropagation();
                     resetFilters();
@@ -1323,7 +1410,7 @@ export default function App() {
                   Reset
                 </button>
               )}
-              <span className="flex items-center justify-center w-7 h-7 rounded-md text-gray-400 text-[0.7rem] cursor-pointer transition-colors hover:bg-gray-100 hover:text-gray-700">
+              <span className="flex items-center justify-center w-7 h-7 rounded-md text-gray-400 dark:text-gray-500 text-[0.7rem] cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300">
                 <span
                   className={`inline-block transition-transform duration-200 ${filtersOpen ? "rotate-90" : ""}`}
                 >
@@ -1335,7 +1422,7 @@ export default function App() {
           <div className={`filters-body ${filtersOpen ? "open" : "closed"}`}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 pl-0.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
                   Dwelling Type
                 </label>
                 <MultiSelect
@@ -1349,7 +1436,7 @@ export default function App() {
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 pl-0.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
                   Bedrooms
                 </label>
                 <MultiSelect
@@ -1363,7 +1450,7 @@ export default function App() {
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 pl-0.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
                   Postcode
                 </label>
                 <TagInput
@@ -1376,7 +1463,7 @@ export default function App() {
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 pl-0.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
                   Weekly Rent
                 </label>
                 <RangeSlider
@@ -1395,57 +1482,57 @@ export default function App() {
         </div>
 
         {data.length === 0 ? (
-          <div className="bg-gray-50 rounded-xl shadow-sm border border-gray-200 flex flex-col items-center justify-center py-16 px-8 text-center">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center py-16 px-8 text-center">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
               fill="currentColor"
-              className="w-12 h-12 text-indigo-200 mb-4"
+              className="w-12 h-12 text-indigo-200 dark:text-indigo-900 mb-4"
             >
               <path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z" />
               <path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a1.03 1.03 0 0 0 .091-.086L12 5.432Z" />
             </svg>
-            <h3 className="text-lg font-semibold text-gray-700 mb-1">
+            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-1">
               No data loaded
             </h3>
-            <p className="text-gray-500 text-sm max-w-sm">
+            <p className="text-gray-500 dark:text-gray-400 text-sm max-w-sm">
               Select a month above and click{" "}
-              <span className="font-semibold text-indigo-600">Download</span> to
+              <span className="font-semibold text-indigo-600 dark:text-indigo-400">Download</span> to
               fetch rental bond data from NSW Fair Trading.
             </p>
           </div>
         ) : (
           <>
-            <div className="bg-gray-50 rounded-xl px-5 py-4 mb-5 shadow-sm border border-gray-200">
+            <div className="bg-white dark:bg-gray-900 rounded-xl px-5 py-4 mb-5 shadow-sm border border-gray-200 dark:border-gray-700">
               <div className="mb-3">
-                <h3 className="text-base font-semibold text-gray-700">
+                <h3 className="text-base font-semibold text-gray-700 dark:text-gray-300">
                   Summary for{" "}
-                  <span className="text-indigo-600">{filterSummary}</span>
+                  <span className="text-indigo-600 dark:text-indigo-400">{filterSummary}</span>
                 </h3>
               </div>
               {stats && (
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-indigo-50 rounded-lg px-4 py-3.5 border border-indigo-100">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
+                  <div className="bg-indigo-50 dark:bg-indigo-950/60 rounded-lg px-4 py-3.5 border border-indigo-100 dark:border-indigo-900">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
                       Min Rent
                     </div>
-                    <div className="text-2xl font-bold text-gray-900">
+                    <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                       {formatCurrency(stats.min)}/wk
                     </div>
                   </div>
-                  <div className="bg-indigo-50 rounded-lg px-4 py-3.5 border border-indigo-100">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
+                  <div className="bg-indigo-50 dark:bg-indigo-950/60 rounded-lg px-4 py-3.5 border border-indigo-100 dark:border-indigo-900">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
                       Avg Rent
                     </div>
-                    <div className="text-2xl font-bold text-indigo-600">
+                    <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                       {formatCurrency(stats.avg)}/wk
                     </div>
                   </div>
-                  <div className="bg-indigo-50 rounded-lg px-4 py-3.5 border border-indigo-100">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
+                  <div className="bg-indigo-50 dark:bg-indigo-950/60 rounded-lg px-4 py-3.5 border border-indigo-100 dark:border-indigo-900">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
                       Max Rent
                     </div>
-                    <div className="text-2xl font-bold text-gray-900">
+                    <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                       {formatCurrency(stats.max)}/wk
                     </div>
                   </div>
@@ -1453,15 +1540,15 @@ export default function App() {
               )}
             </div>
 
-            <div className="bg-gray-50 rounded-xl shadow-sm overflow-hidden border border-gray-200">
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700">
               {/* Card header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-                <h2 className="text-base font-semibold">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
                   {filtered.length.toLocaleString()} result
                   {filtered.length !== 1 ? "s" : ""} out of{" "}
                   {data.length.toLocaleString()} bond lodgements
                 </h2>
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
                   Group by
                   <div className="relative">
                     <select
@@ -1469,7 +1556,7 @@ export default function App() {
                       onChange={(e) =>
                         setGroupBy(e.target.value as GroupByField)
                       }
-                      className="appearance-none pl-3 pr-8 py-1.5 min-h-[34px] border border-gray-300 rounded-lg bg-white text-sm text-gray-900 font-normal cursor-pointer transition-colors hover:border-gray-400 focus:outline-none focus:border-indigo-600 focus:ring-3 focus:ring-indigo-600/10"
+                      className="appearance-none pl-3 pr-8 py-1.5 min-h-[34px] border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 font-normal cursor-pointer transition-colors hover:border-gray-400 dark:hover:border-gray-500 focus:outline-none focus:border-indigo-600 focus:ring-3 focus:ring-indigo-600/10"
                     >
                       <option value="none">None</option>
                       <option value="dwellingType">Dwelling Type</option>
@@ -1478,21 +1565,21 @@ export default function App() {
                         {viewTab === "graphs" ? "Postcode Region" : "Postcode"}
                       </option>
                     </select>
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-gray-400">&#9660;</span>
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-gray-400 dark:text-gray-500">&#9660;</span>
                   </div>
                 </label>
               </div>
 
               {/* Tab strip */}
-              <div className="flex border-b border-gray-200 bg-white px-5">
+              <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-5">
                 {(["table", "graphs"] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setViewTab(tab)}
                     className={`px-4 py-2.5 text-sm font-semibold capitalize border-b-2 -mb-px transition-colors cursor-pointer ${
                       viewTab === tab
-                        ? "border-indigo-600 text-indigo-600"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                        ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400"
+                        : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600"
                     }`}
                   >
                     {tab === "table" ? "Table" : "Graphs"}
@@ -1509,24 +1596,24 @@ export default function App() {
                       return (
                         <div
                           key={key}
-                          className="border-b border-gray-100 last:border-b-0"
+                          className="border-b border-gray-100 dark:border-gray-800 last:border-b-0"
                         >
                           <div
-                            className="flex items-center justify-between px-5 py-3 bg-gray-50 cursor-pointer select-none transition-colors hover:bg-gray-100"
+                            className="flex items-center justify-between px-5 py-3 bg-gray-50 dark:bg-gray-800/50 cursor-pointer select-none transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
                             onClick={() => toggleGroup(key)}
                           >
-                            <h3 className="text-[0.95rem] font-semibold flex items-center gap-2">
+                            <h3 className="text-[0.95rem] font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
                               <span
-                                className={`inline-block text-[0.7rem] text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+                                className={`inline-block text-[0.7rem] text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
                               >
                                 &#9654;
                               </span>
                               {groupLabel(groupBy, key)}
-                              <span className="text-sm font-medium text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
+                              <span className="text-sm font-medium text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-full">
                                 {items.length.toLocaleString()}
                               </span>
                             </h3>
-                            <div className="flex gap-4 text-sm text-gray-500">
+                            <div className="flex gap-4 text-sm text-gray-500 dark:text-gray-400">
                               <span className="whitespace-nowrap">
                                 Avg {formatCurrency(s.avg)}/wk
                               </span>
@@ -1541,7 +1628,7 @@ export default function App() {
                     })
                   : renderTable(sorted, true)
               ) : (
-                <div className="p-5 space-y-8">
+                <div className="p-5 space-y-8 bg-white dark:bg-gray-900">
                   <HistogramChart
                     bins={chartBins}
                     groupKeys={chartGroupKeys}
@@ -1559,6 +1646,7 @@ export default function App() {
             </div>
           </>
         )}
+      </div>
       </div>
       {downloading && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">
