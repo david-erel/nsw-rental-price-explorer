@@ -2,12 +2,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RentalBond, Filters, GroupByField } from "./types";
 import { DWELLING_TYPE_LABELS, BEDROOM_OPTIONS, MONTH_CATALOG } from "./types";
 import * as XLSX from "xlsx";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  ScatterChart,
+  Scatter,
+  ZAxis,
+} from "recharts";
 import "./App.css";
 
 const RENT_STEP = 50;
 const RENT_ABS_MIN = 0;
 const RENT_ABS_MAX = 3000;
 const PAGE_SIZE = 50;
+const CHART_COLORS = ["#4f46e5", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
+const CHART_BIN_COUNT = 50;
 
 type SortField =
   | "lodgementDate"
@@ -419,6 +434,306 @@ function RangeSlider({
   );
 }
 
+// ── Postcode regions ──
+// Inner Sydney split into 20-wide buckets (10 buckets), outer NSW in 100-wide buckets (7 buckets)
+
+const POSTCODE_REGIONS: Array<{ lo: number; hi: number; name: string }> = [
+  { lo: 2000, hi: 2019, name: "CBD · Kings Cross" },
+  { lo: 2020, hi: 2039, name: "Bondi · Eastern Suburbs" },
+  { lo: 2040, hi: 2059, name: "Inner West · Newtown" },
+  { lo: 2060, hi: 2079, name: "North Sydney · Chatswood" },
+  { lo: 2080, hi: 2099, name: "Mosman · Manly · Dee Why" },
+  { lo: 2100, hi: 2119, name: "Northern Beaches · Ryde" },
+  { lo: 2120, hi: 2139, name: "Strathfield · Hills District" },
+  { lo: 2140, hi: 2159, name: "Parramatta · Castle Hill" },
+  { lo: 2160, hi: 2179, name: "Liverpool · Fairfield" },
+  { lo: 2180, hi: 2199, name: "Canterbury · Bankstown" },
+  { lo: 2200, hi: 2299, name: "South Sydney · Central Coast" },
+  { lo: 2300, hi: 2399, name: "Newcastle · Hunter" },
+  { lo: 2400, hi: 2499, name: "Mid-North Coast · New England" },
+  { lo: 2500, hi: 2599, name: "Wollongong · Illawarra" },
+  { lo: 2600, hi: 2699, name: "Canberra · ACT Region" },
+  { lo: 2700, hi: 2799, name: "Penrith · Blue Mountains" },
+  { lo: 2800, hi: 2899, name: "Central NSW · Orange" },
+];
+
+function getPostcodeRegion(postcode: number) {
+  return POSTCODE_REGIONS.find((r) => postcode >= r.lo && postcode <= r.hi);
+}
+
+function formatPostcodeRegionKey(key: string) {
+  const [loStr, hiStr] = key.split("-");
+  const lo = Number(loStr);
+  const hi = Number(hiStr);
+  const region = POSTCODE_REGIONS.find((r) => r.lo === lo && r.hi === hi);
+  return `${lo}–${hi} · ${region?.name ?? ""}`;
+}
+
+// ── Chart types ──
+
+interface RentBin {
+  label: string;       // "$400" — lower bound only, used as X axis tick
+  fullLabel: string;   // "$400–$450" — used in tooltips
+  midpoint: number;
+  total: number;
+  avg: number;         // actual avg weekly rent of records in this bin
+  byGroup: Record<string, number>;
+  avgByGroup: Record<string, number>;
+}
+
+// ── Staggered X-axis tick (Recharts custom tick API) ──
+// Alternates labels between two vertical positions so more fit without overlap.
+
+function StaggeredXTick({
+  x = 0,
+  y = 0,
+  payload,
+  index = 0,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value: string };
+  index?: number;
+}) {
+  const dy = index % 2 === 0 ? 12 : 26;
+  return (
+    <text x={x} y={y + dy} textAnchor="middle" fill="#6b7280" fontSize={11}>
+      {payload?.value}
+    </text>
+  );
+}
+
+// ── HistogramChart ──
+
+interface HistogramChartProps {
+  bins: RentBin[];
+  groupKeys: string[];
+  groupBy: GroupByField;
+}
+
+function HistogramChart({ bins, groupKeys, groupBy }: HistogramChartProps) {
+  const grouped = groupBy !== "none" && groupBy !== "postcode" && groupKeys.length > 0;
+
+  const data = bins.map((b) => {
+    const entry: Record<string, number | string> = {
+      label: b.label,
+      fullLabel: b.fullLabel,
+      avg: b.avg,
+    };
+    if (grouped) {
+      groupKeys.forEach((k) => {
+        entry[k] = b.byGroup[k] ?? 0;
+        entry[`avg_${k}`] = b.avgByGroup[k] ?? 0;
+      });
+    } else {
+      entry["count"] = b.total;
+    }
+    return entry;
+  });
+
+  const formatGroupLabel = (key: string) => {
+    if (groupBy === "dwellingType") return DWELLING_TYPE_LABELS[key] ?? key;
+    if (groupBy === "bedrooms") {
+      if (key === "null") return "Unknown";
+      return key === "0" ? "Studio" : `${key} Bed`;
+    }
+    if (groupBy === "postcode") return formatPostcodeRegionKey(key);
+    return key;
+  };
+
+  // Show ~10 evenly spaced ticks on the X axis
+  const xInterval = Math.max(0, Math.floor(bins.length / 10) - 1);
+
+  // Track container width to decide whether to stagger labels
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(9999);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setContainerWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const stagger = containerWidth < 640;
+
+  return (
+    <div ref={containerRef}>
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">Rent Distribution</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <LineChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tick={stagger ? <StaggeredXTick /> : { fontSize: 11, fill: "#6b7280" }}
+            interval={xInterval}
+            height={stagger ? 44 : 28}
+          />
+          <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} width={48} />
+          <Tooltip
+            contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              const bin = bins.find((b) => b.label === label);
+              return (
+                <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow text-xs space-y-1">
+                  <p className="font-semibold text-gray-700">{bin?.fullLabel ?? label}</p>
+                  {grouped
+                    ? payload.map((p) => {
+                        const gk = String(p.dataKey);
+                        const avg = bin?.avgByGroup[gk];
+                        return (
+                          <p key={gk} style={{ color: p.color }}>
+                            {formatGroupLabel(gk)}: {Number(p.value).toLocaleString()}
+                            {avg ? ` — $${avg.toLocaleString()} (avg)` : ""}
+                          </p>
+                        );
+                      })
+                    : (() => {
+                        const p = payload[0];
+                        return (
+                          <p className="text-indigo-600">
+                            {Number(p?.value ?? 0).toLocaleString()} properties
+                            {bin?.avg ? ` — $${bin.avg.toLocaleString()} (avg)` : ""}
+                          </p>
+                        );
+                      })()}
+                </div>
+              );
+            }}
+          />
+          {grouped && <Legend formatter={formatGroupLabel} wrapperStyle={{ fontSize: 12, paddingTop: 4 }} />}
+          {grouped
+            ? groupKeys.map((k, i) => (
+                <Line
+                  key={k}
+                  type="monotone"
+                  dataKey={k}
+                  stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              ))
+            : <Line type="monotone" dataKey="count" stroke="#4f46e5" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ── BubbleMatrix ──
+
+interface BubbleMatrixProps {
+  bins: RentBin[];
+  groupKeys: string[];
+  groupBy: GroupByField;
+}
+
+function BubbleMatrix({ bins, groupKeys, groupBy }: BubbleMatrixProps) {
+  const formatGroupLabel = (key: string) => {
+    if (groupBy === "dwellingType") return DWELLING_TYPE_LABELS[key] ?? key;
+    if (groupBy === "bedrooms") {
+      if (key === "null") return "Unknown";
+      return key === "0" ? "Studio" : `${key} Bed`;
+    }
+    if (groupBy === "postcode") return formatPostcodeRegionKey(key);
+    return key;
+  };
+
+  const maxCount = useMemo(() => {
+    let m = 0;
+    bins.forEach((b) => groupKeys.forEach((k) => { if ((b.byGroup[k] ?? 0) > m) m = b.byGroup[k] ?? 0; }));
+    return m;
+  }, [bins, groupKeys]);
+
+  const scatterData = useMemo(() =>
+    groupKeys.map((key, yi) =>
+      bins
+        .map((b) => ({
+          x: b.midpoint,
+          y: yi,
+          z: b.byGroup[key] ?? 0,
+          label: b.label,
+          fullLabel: b.fullLabel,
+          avg: b.avgByGroup[key] ?? 0,
+          group: key,
+        }))
+        .filter((d) => d.z > 0)
+    ),
+    [bins, groupKeys]
+  );
+
+  const yTicks = groupKeys.map((_, i) => i);
+  const yTickFormatter = (i: number) => formatGroupLabel(groupKeys[i] ?? "");
+
+  // Derive step from consecutive midpoints so we can display lower bounds
+  const binStep = bins.length >= 2 ? bins[1].midpoint - bins[0].midpoint : 0;
+
+  // Show ~10 evenly spaced X ticks
+  const allMidpoints = bins.map((b) => b.midpoint);
+  const xTickInterval = Math.max(1, Math.floor(allMidpoints.length / 10));
+  const xTicks = allMidpoints.filter((_, i) => i % xTickInterval === 0);
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">Rent vs Category Bubble Matrix</h3>
+      <ResponsiveContainer width="100%" height={Math.max(200, groupKeys.length * 44 + 80)}>
+        <ScatterChart margin={{ top: 8, right: 24, left: 8, bottom: 60 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis
+            type="number"
+            dataKey="x"
+            name="Rent"
+            domain={["dataMin", "dataMax"]}
+            ticks={xTicks}
+            tickFormatter={(v: number) => `$${Math.round(v - binStep / 2)}`}
+            tick={{ fontSize: 11, fill: "#6b7280" }}
+            height={28}
+          />
+          <YAxis
+            type="number"
+            dataKey="y"
+            name="Category"
+            ticks={yTicks}
+            tickFormatter={yTickFormatter}
+            tick={{ fontSize: 11, fill: "#6b7280" }}
+            width={groupBy === "postcode" ? 200 : 90}
+            domain={[-0.5, groupKeys.length - 0.5]}
+          />
+          <ZAxis type="number" dataKey="z" range={[30, Math.min(2400, maxCount * 4 + 60)]} />
+          <Tooltip
+            cursor={false}
+            content={({ payload }) => {
+              if (!payload?.length) return null;
+              const d = payload[0]?.payload as { x: number; fullLabel: string; group: string; z: number; avg: number } | undefined;
+              if (!d) return null;
+              return (
+                <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow text-xs space-y-0.5">
+                  <p className="font-semibold text-gray-800">{formatGroupLabel(d.group)}</p>
+                  <p className="text-gray-500">{d.fullLabel}</p>
+                  <p className="text-indigo-600 font-semibold">{d.z.toLocaleString()} properties</p>
+                  {d.avg > 0 && <p className="text-gray-500">${d.avg.toLocaleString()} (avg)</p>}
+                </div>
+              );
+            }}
+          />
+          {scatterData.map((points, i) => (
+            <Scatter
+              key={groupKeys[i]}
+              name={formatGroupLabel(groupKeys[i])}
+              data={points}
+              fill={CHART_COLORS[i % CHART_COLORS.length]}
+              fillOpacity={0.75}
+            />
+          ))}
+        </ScatterChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 // ── Main App ──
 
 export default function App() {
@@ -441,6 +756,8 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState("2025-01");
   const [localMonths, setLocalMonths] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState(false);
+  const [pageSize, setPageSize] = useState(10);
+  const [viewTab, setViewTab] = useState<"table" | "graphs">("table");
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -543,6 +860,82 @@ export default function App() {
     };
   }, [filtered]);
 
+  // Postcode is handled via region bucketing in the binning step
+  const chartGroupBy: GroupByField = groupBy;
+
+  const { chartBins, chartGroupKeys } = useMemo(() => {
+    if (filtered.length === 0) return { chartBins: [], chartGroupKeys: [] };
+
+    // Exclude nonsensical bedroom counts (>10) from chart data
+    const chartData = filtered.filter(
+      (r) => r.bedrooms === null || r.bedrooms <= 10,
+    );
+    if (chartData.length === 0) return { chartBins: [], chartGroupKeys: [] };
+
+    const rents = chartData.map((r) => r.weeklyRent);
+    const minRent = Math.min(...rents);
+    const maxRent = Math.max(...rents);
+    const step = Math.ceil((maxRent - minRent) / CHART_BIN_COUNT / 25) * 25 || 25;
+    const start = Math.floor(minRent / step) * step;
+
+    const bins: RentBin[] = [];
+    for (let lo = start; lo < maxRent; lo += step) {
+      const hi = lo + step;
+      bins.push({
+        label: `$${lo}`,
+        fullLabel: `$${lo}–$${hi}`,
+        midpoint: lo + step / 2,
+        total: 0,
+        avg: 0,
+        byGroup: {},
+        avgByGroup: {},
+      });
+    }
+
+    // Accumulate sums to compute averages
+    const sumTotal: number[] = new Array(bins.length).fill(0);
+    const sumByGroup: Record<string, number[]> = {};
+
+    const groupKeySet = new Set<string>();
+    for (const r of chartData) {
+      const rent = r.weeklyRent;
+      const idx = Math.min(Math.floor((rent - start) / step), bins.length - 1);
+      if (idx < 0) continue;
+      bins[idx].total += 1;
+      sumTotal[idx] += rent;
+      if (chartGroupBy !== "none") {
+        let gk: string;
+        if (chartGroupBy === "postcode") {
+          const region = getPostcodeRegion(r.postcode);
+          if (!region) continue;
+          gk = `${region.lo}-${region.hi}`;
+        } else {
+          gk = String(r[chartGroupBy as keyof RentalBond]);
+        }
+        bins[idx].byGroup[gk] = (bins[idx].byGroup[gk] ?? 0) + 1;
+        if (!sumByGroup[gk]) sumByGroup[gk] = new Array(bins.length).fill(0);
+        sumByGroup[gk][idx] += rent;
+        groupKeySet.add(gk);
+      }
+    }
+
+    // Compute averages
+    bins.forEach((b, i) => {
+      b.avg = b.total > 0 ? Math.round(sumTotal[i] / b.total) : 0;
+      for (const gk of Object.keys(b.byGroup)) {
+        b.avgByGroup[gk] =
+          b.byGroup[gk] > 0
+            ? Math.round(sumByGroup[gk][i] / b.byGroup[gk])
+            : 0;
+      }
+    });
+
+    const groupKeys = [...groupKeySet].sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true }),
+    );
+    return { chartBins: bins, chartGroupKeys: groupKeys };
+  }, [filtered, chartGroupBy]);
+
   const hasActiveFilters = useMemo(() => {
     return (
       filters.dwellingTypes.length > 0 ||
@@ -587,7 +980,7 @@ export default function App() {
     return parts.join(" · ");
   }, [filters, hasActiveFilters]);
 
-  useEffect(() => setPage(0), [filters, groupBy, sortField, sortDir]);
+  useEffect(() => setPage(0), [filters, groupBy, sortField, sortDir, pageSize]);
 
   function toggleSort(field: SortField) {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -674,11 +1067,11 @@ export default function App() {
     sortField === field ? (sortDir === "asc" ? " ↑" : " ↓") : "";
 
   function renderTable(items: RentalBond[], paginate: boolean) {
-    const start = paginate ? page * PAGE_SIZE : 0;
+    const start = paginate ? page * pageSize : 0;
     const pageItems = paginate
-      ? items.slice(start, start + PAGE_SIZE)
+      ? items.slice(start, start + pageSize)
       : items.slice(0, PAGE_SIZE);
-    const totalPages = paginate ? Math.ceil(items.length / PAGE_SIZE) : 1;
+    const totalPages = paginate ? Math.ceil(items.length / pageSize) : 1;
 
     return (
       <>
@@ -746,25 +1139,42 @@ export default function App() {
             ))}
           </tbody>
         </table>
-        {paginate && totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 p-4 border-t border-gray-200">
-            <button
-              disabled={page === 0}
-              onClick={() => setPage((p) => p - 1)}
-              className="px-3 py-1.5 border border-gray-300 rounded-md bg-white text-sm cursor-pointer transition-colors hover:enabled:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Previous
-            </button>
-            <span className="text-sm text-gray-500">
-              Page {page + 1} of {totalPages}
-            </span>
-            <button
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => p + 1)}
-              className="px-3 py-1.5 border border-gray-300 rounded-md bg-white text-sm cursor-pointer transition-colors hover:enabled:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Next
-            </button>
+        {paginate && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+            <div className="w-28" />
+            <div className="flex items-center gap-2">
+              <button
+                disabled={page === 0}
+                onClick={() => setPage((p) => p - 1)}
+                className="px-3 py-1.5 border border-gray-300 rounded-md bg-white text-sm cursor-pointer transition-colors hover:enabled:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              {totalPages > 1 && (
+                <span className="text-sm text-gray-500">
+                  Page {page + 1} of {totalPages}
+                </span>
+              )}
+              <button
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => p + 1)}
+                className="px-3 py-1.5 border border-gray-300 rounded-md bg-white text-sm cursor-pointer transition-colors hover:enabled:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+            <div className="relative w-28 flex justify-end">
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="appearance-none pl-3 pr-7 py-1.5 border border-gray-300 rounded-lg bg-white text-sm text-gray-700 cursor-pointer transition-colors hover:border-gray-400 focus:outline-none focus:border-indigo-600"
+              >
+                <option value={10}>10 rows</option>
+                <option value={20}>20 rows</option>
+                <option value={50}>50 rows</option>
+              </select>
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[0.6rem] text-gray-400">&#9660;</span>
+            </div>
           </div>
         )}
       </>
@@ -1024,6 +1434,7 @@ export default function App() {
             </div>
 
             <div className="bg-gray-50 rounded-xl shadow-sm overflow-hidden border border-gray-200">
+              {/* Card header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
                 <h2 className="text-base font-semibold">
                   {filtered.length.toLocaleString()} result
@@ -1043,51 +1454,88 @@ export default function App() {
                       <option value="none">None</option>
                       <option value="dwellingType">Dwelling Type</option>
                       <option value="bedrooms">Bedrooms</option>
-                      <option value="postcode">Postcode</option>
+                      <option value="postcode">
+                        {viewTab === "graphs" ? "Postcode Region" : "Postcode"}
+                      </option>
                     </select>
                     <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-gray-400">&#9660;</span>
                   </div>
                 </label>
               </div>
 
-              {grouped
-                ? grouped.map(([key, items]) => {
-                    const s = groupStats(items);
-                    const isOpen = expandedGroups.has(key);
-                    return (
-                      <div
-                        key={key}
-                        className="border-b border-gray-100 last:border-b-0"
-                      >
+              {/* Tab strip */}
+              <div className="flex border-b border-gray-200 bg-white px-5">
+                {(["table", "graphs"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setViewTab(tab)}
+                    className={`px-4 py-2.5 text-sm font-semibold capitalize border-b-2 -mb-px transition-colors cursor-pointer ${
+                      viewTab === tab
+                        ? "border-indigo-600 text-indigo-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    }`}
+                  >
+                    {tab === "table" ? "Table" : "Graphs"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab content */}
+              {viewTab === "table" ? (
+                grouped
+                  ? grouped.map(([key, items]) => {
+                      const s = groupStats(items);
+                      const isOpen = expandedGroups.has(key);
+                      return (
                         <div
-                          className="flex items-center justify-between px-5 py-3 bg-gray-50 cursor-pointer select-none transition-colors hover:bg-gray-100"
-                          onClick={() => toggleGroup(key)}
+                          key={key}
+                          className="border-b border-gray-100 last:border-b-0"
                         >
-                          <h3 className="text-[0.95rem] font-semibold flex items-center gap-2">
-                            <span
-                              className={`inline-block text-[0.7rem] text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
-                            >
-                              &#9654;
-                            </span>
-                            {groupLabel(groupBy, key)}
-                            <span className="text-sm font-medium text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
-                              {items.length.toLocaleString()}
-                            </span>
-                          </h3>
-                          <div className="flex gap-4 text-sm text-gray-500">
-                            <span className="whitespace-nowrap">
-                              Avg {formatCurrency(s.avg)}/wk
-                            </span>
-                            <span className="whitespace-nowrap">
-                              Median {formatCurrency(s.median)}/wk
-                            </span>
+                          <div
+                            className="flex items-center justify-between px-5 py-3 bg-gray-50 cursor-pointer select-none transition-colors hover:bg-gray-100"
+                            onClick={() => toggleGroup(key)}
+                          >
+                            <h3 className="text-[0.95rem] font-semibold flex items-center gap-2">
+                              <span
+                                className={`inline-block text-[0.7rem] text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+                              >
+                                &#9654;
+                              </span>
+                              {groupLabel(groupBy, key)}
+                              <span className="text-sm font-medium text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
+                                {items.length.toLocaleString()}
+                              </span>
+                            </h3>
+                            <div className="flex gap-4 text-sm text-gray-500">
+                              <span className="whitespace-nowrap">
+                                Avg {formatCurrency(s.avg)}/wk
+                              </span>
+                              <span className="whitespace-nowrap">
+                                Median {formatCurrency(s.median)}/wk
+                              </span>
+                            </div>
                           </div>
+                          {isOpen && renderTable(items, false)}
                         </div>
-                        {isOpen && renderTable(items, false)}
-                      </div>
-                    );
-                  })
-                : renderTable(sorted, true)}
+                      );
+                    })
+                  : renderTable(sorted, true)
+              ) : (
+                <div className="p-5 space-y-8">
+                  <HistogramChart
+                    bins={chartBins}
+                    groupKeys={chartGroupKeys}
+                    groupBy={chartGroupBy}
+                  />
+                  {chartGroupBy !== "none" && chartGroupKeys.length > 0 && (
+                    <BubbleMatrix
+                      bins={chartBins}
+                      groupKeys={chartGroupKeys}
+                      groupBy={chartGroupBy}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}
