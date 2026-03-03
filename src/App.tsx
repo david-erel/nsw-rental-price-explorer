@@ -903,70 +903,62 @@ export default function App() {
             </div>
           </div>
           <div className={`filters-body ${filtersOpen ? "open" : "closed"}`}>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
-              <div className="flex items-center gap-3">
-                <label className="text-sm font-semibold text-gray-700 shrink-0 whitespace-nowrap min-w-[90px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 pl-0.5">
                   Dwelling Type
                 </label>
-                <div className="flex-1 min-w-0">
-                  <MultiSelect
-                    options={dwellingOptions}
-                    selected={filters.dwellingTypes}
-                    onChange={(v) =>
-                      setFilters((f) => ({ ...f, dwellingTypes: v }))
-                    }
-                    placeholder="All types"
-                  />
-                </div>
+                <MultiSelect
+                  options={dwellingOptions}
+                  selected={filters.dwellingTypes}
+                  onChange={(v) =>
+                    setFilters((f) => ({ ...f, dwellingTypes: v }))
+                  }
+                  placeholder="All types"
+                />
               </div>
 
-              <div className="flex items-center gap-3">
-                <label className="text-sm font-semibold text-gray-700 shrink-0 whitespace-nowrap min-w-[90px]">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 pl-0.5">
                   Bedrooms
                 </label>
-                <div className="flex-1 min-w-0">
-                  <MultiSelect
-                    options={bedroomSelectOptions}
-                    selected={filters.bedrooms.map(String)}
-                    onChange={(v) =>
-                      setFilters((f) => ({ ...f, bedrooms: v.map(Number) }))
-                    }
-                    placeholder="Any"
-                  />
-                </div>
+                <MultiSelect
+                  options={bedroomSelectOptions}
+                  selected={filters.bedrooms.map(String)}
+                  onChange={(v) =>
+                    setFilters((f) => ({ ...f, bedrooms: v.map(Number) }))
+                  }
+                  placeholder="Any"
+                />
               </div>
 
-              <div className="flex items-center gap-3">
-                <label className="text-sm font-semibold text-gray-700 shrink-0 whitespace-nowrap min-w-[90px]">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 pl-0.5">
                   Postcode
                 </label>
-                <div className="flex-1 min-w-0">
-                  <TagInput
-                    tags={filters.postcodes}
-                    onChange={(postcodes) =>
-                      setFilters((f) => ({ ...f, postcodes }))
-                    }
-                    placeholder="Type postcode + Enter"
-                  />
-                </div>
+                <TagInput
+                  tags={filters.postcodes}
+                  onChange={(postcodes) =>
+                    setFilters((f) => ({ ...f, postcodes }))
+                  }
+                  placeholder="Type postcode + Enter"
+                />
               </div>
 
-              <div className="flex items-center gap-3">
-                <label className="text-sm font-semibold text-gray-700 shrink-0 whitespace-nowrap min-w-[90px]">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 pl-0.5">
                   Weekly Rent
                 </label>
-                <div className="flex-1 min-w-0">
-                  <RangeSlider
-                    min={RENT_ABS_MIN}
-                    max={RENT_ABS_MAX}
-                    step={RENT_STEP}
-                    valueMin={filters.rentMin}
-                    valueMax={filters.rentMax}
-                    onChange={(rentMin, rentMax) =>
-                      setFilters((f) => ({ ...f, rentMin, rentMax }))
-                    }
-                  />
-                </div>
+                <RangeSlider
+                  min={RENT_ABS_MIN}
+                  max={RENT_ABS_MAX}
+                  step={RENT_STEP}
+                  valueMin={filters.rentMin}
+                  valueMax={filters.rentMax}
+                  onChange={(rentMin, rentMax) =>
+                    setFilters((f) => ({ ...f, rentMin, rentMax }))
+                  }
+                />
               </div>
             </div>
           </div>
@@ -1038,23 +1030,24 @@ export default function App() {
                   {filtered.length !== 1 ? "s" : ""} out of{" "}
                   {data.length.toLocaleString()} bond lodgements
                 </h2>
-                <div>
-                  <label>
-                    Group by:{" "}
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                  Group by
+                  <div className="relative">
                     <select
                       value={groupBy}
                       onChange={(e) =>
                         setGroupBy(e.target.value as GroupByField)
                       }
-                      className="px-2.5 py-1.5 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:border-indigo-600"
+                      className="appearance-none pl-3 pr-8 py-1.5 min-h-[34px] border border-gray-300 rounded-lg bg-white text-sm text-gray-900 font-normal cursor-pointer transition-colors hover:border-gray-400 focus:outline-none focus:border-indigo-600 focus:ring-3 focus:ring-indigo-600/10"
                     >
                       <option value="none">None</option>
                       <option value="dwellingType">Dwelling Type</option>
                       <option value="bedrooms">Bedrooms</option>
                       <option value="postcode">Postcode</option>
                     </select>
-                  </label>
-                </div>
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-gray-400">&#9660;</span>
+                  </div>
+                </label>
               </div>
 
               {grouped
