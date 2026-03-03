@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import fs from "fs";
 import path from "path";
 
+// These are dev only stubs that are not safe to run in production
 function saveJsonPlugin() {
   return {
     name: "save-json",

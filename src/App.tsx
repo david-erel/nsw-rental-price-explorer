@@ -25,12 +25,7 @@ const PAGE_SIZE = 50;
 const CHART_COLORS = ["#4f46e5", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
 const CHART_BIN_COUNT = 50;
 
-type SortField =
-  | "lodgementDate"
-  | "postcode"
-  | "dwellingType"
-  | "bedrooms"
-  | "weeklyRent";
+type SortField = "lodgementDate" | "postcode" | "dwellingType" | "bedrooms" | "weeklyRent";
 type SortDir = "asc" | "desc";
 type ThemeMode = "light" | "dark" | "system";
 
@@ -45,9 +40,7 @@ function applyDarkClass(mode: ThemeMode) {
 function median(arr: number[]): number {
   const sorted = [...arr].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0
-    ? sorted[mid]
-    : (sorted[mid - 1] + sorted[mid]) / 2;
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 function formatCurrency(n: number): string {
@@ -82,8 +75,7 @@ function logDataStats(label: string, records: RentalBond[]) {
   const zeros = records.filter((r) => r.weeklyRent === 0);
   console.group(`[data] ${label}`);
   console.log(`Total: ${records.length}, Zero-rent: ${zeros.length}`);
-  if (zeros.length > 0)
-    console.log("First 3 zero-rent records:", zeros.slice(0, 3));
+  if (zeros.length > 0) console.log("First 3 zero-rent records:", zeros.slice(0, 3));
   console.groupEnd();
 }
 
@@ -100,10 +92,7 @@ function parseXlsxData(buffer: ArrayBuffer): RentalBond[] {
     const sheetRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
     for (let i = 0; i < Math.min(sheetRows.length, 20); i++) {
       const row = sheetRows[i];
-      if (
-        Array.isArray(row) &&
-        row.some((c) => String(c).trim().toLowerCase() === "postcode")
-      ) {
+      if (Array.isArray(row) && row.some((c) => String(c).trim().toLowerCase() === "postcode")) {
         headerIdx = i;
         rows = sheetRows;
         break;
@@ -111,15 +100,12 @@ function parseXlsxData(buffer: ArrayBuffer): RentalBond[] {
     }
     if (rows) break;
   }
-  if (!rows || headerIdx === -1)
-    throw new Error("Could not find header row in XLSX");
+  if (!rows || headerIdx === -1) throw new Error("Could not find header row in XLSX");
 
   const rawHeaders = rows[headerIdx] as unknown[];
   const headers = rawHeaders.map((h) => String(h).trim().toLowerCase());
   const col = {
-    date: headers.findIndex(
-      (h) => h.includes("lodgement") && h.includes("date"),
-    ),
+    date: headers.findIndex((h) => h.includes("lodgement") && h.includes("date")),
     postcode: headers.findIndex((h) => h === "postcode"),
     dwelling: headers.findIndex((h) => h.includes("dwelling")),
     bedrooms: headers.findIndex((h) => h.includes("bedroom")),
@@ -199,12 +185,7 @@ function parseXlsxData(buffer: ArrayBuffer): RentalBond[] {
       lodgementDate: dateStr,
       postcode: toNum(pc),
       dwellingType: col.dwelling >= 0 ? String(row[col.dwelling] ?? "") : "",
-      bedrooms:
-        beds != null &&
-        String(beds).trim() !== "" &&
-        String(beds).toLowerCase() !== "u"
-          ? toNum(beds)
-          : null,
+      bedrooms: beds != null && String(beds).trim() !== "" && String(beds).toLowerCase() !== "u" ? toNum(beds) : null,
       weeklyRent,
     });
   }
@@ -230,28 +211,21 @@ function MultiSelect({
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
   function toggle(value: string) {
-    onChange(
-      selected.includes(value)
-        ? selected.filter((v) => v !== value)
-        : [...selected, value],
-    );
+    onChange(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]);
   }
 
   const displayText =
     selected.length === 0
       ? null
       : selected.length <= 2
-        ? selected
-            .map((v) => options.find((o) => o.value === v)?.label ?? v)
-            .join(", ")
+        ? selected.map((v) => options.find((o) => o.value === v)?.label ?? v).join(", ")
         : `${selected.length} selected`;
 
   return (
@@ -261,15 +235,11 @@ function MultiSelect({
         onClick={() => setOpen((o) => !o)}
       >
         {displayText ? (
-          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-            {displayText}
-          </span>
+          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{displayText}</span>
         ) : (
           <span className="text-gray-400 dark:text-gray-500">{placeholder}</span>
         )}
-        <span className="arrow ml-2 text-[0.6rem] text-gray-400 dark:text-gray-500 transition-transform">
-          &#9660;
-        </span>
+        <span className="arrow ml-2 text-[0.6rem] text-gray-400 dark:text-gray-500 transition-transform">&#9660;</span>
       </div>
       {open && (
         <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto p-1">
@@ -411,30 +381,12 @@ function RangeSlider({
         />
       </div>
       <div className="range-slider-inputs relative h-0">
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={valueMin}
-          onChange={handleMin}
-        />
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={valueMax}
-          onChange={handleMax}
-        />
+        <input type="range" min={min} max={max} step={step} value={valueMin} onChange={handleMin} />
+        <input type="range" min={min} max={max} step={step} value={valueMax} onChange={handleMax} />
       </div>
       <div className="flex justify-between text-sm font-semibold text-indigo-600 mt-0.5">
         <span>{formatCurrency(valueMin)}</span>
-        <span>
-          {valueMax >= max
-            ? formatCurrency(valueMax) + "+"
-            : formatCurrency(valueMax)}
-        </span>
+        <span>{valueMax >= max ? formatCurrency(valueMax) + "+" : formatCurrency(valueMax)}</span>
       </div>
       <div className="flex justify-between text-[0.65rem] text-gray-400 dark:text-gray-500 mt-px">
         <span>{formatCurrency(min)}</span>
@@ -482,11 +434,11 @@ function formatPostcodeRegionKey(key: string) {
 // ── Chart types ──
 
 interface RentBin {
-  label: string;       // "$400" — lower bound only, used as X axis tick
-  fullLabel: string;   // "$400–$450" — used in tooltips
+  label: string; // "$400" — lower bound only, used as X axis tick
+  fullLabel: string; // "$400–$450" — used in tooltips
   midpoint: number;
   total: number;
-  avg: number;         // actual avg weekly rent of records in this bin
+  avg: number; // actual avg weekly rent of records in this bin
   byGroup: Record<string, number>;
   avgByGroup: Record<string, number>;
 }
@@ -614,19 +566,21 @@ function HistogramChart({ bins, groupKeys, groupBy }: HistogramChartProps) {
             }}
           />
           {grouped && <Legend formatter={formatGroupLabel} wrapperStyle={{ fontSize: 12, paddingTop: 4 }} />}
-          {grouped
-            ? groupKeys.map((k, i) => (
-                <Line
-                  key={k}
-                  type="monotone"
-                  dataKey={k}
-                  stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-              ))
-            : <Line type="monotone" dataKey="count" stroke="#4f46e5" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />}
+          {grouped ? (
+            groupKeys.map((k, i) => (
+              <Line
+                key={k}
+                type="monotone"
+                dataKey={k}
+                stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            ))
+          ) : (
+            <Line type="monotone" dataKey="count" stroke="#4f46e5" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -654,25 +608,30 @@ function BubbleMatrix({ bins, groupKeys, groupBy }: BubbleMatrixProps) {
 
   const maxCount = useMemo(() => {
     let m = 0;
-    bins.forEach((b) => groupKeys.forEach((k) => { if ((b.byGroup[k] ?? 0) > m) m = b.byGroup[k] ?? 0; }));
+    bins.forEach((b) =>
+      groupKeys.forEach((k) => {
+        if ((b.byGroup[k] ?? 0) > m) m = b.byGroup[k] ?? 0;
+      }),
+    );
     return m;
   }, [bins, groupKeys]);
 
-  const scatterData = useMemo(() =>
-    groupKeys.map((key, yi) =>
-      bins
-        .map((b) => ({
-          x: b.midpoint,
-          y: yi,
-          z: b.byGroup[key] ?? 0,
-          label: b.label,
-          fullLabel: b.fullLabel,
-          avg: b.avgByGroup[key] ?? 0,
-          group: key,
-        }))
-        .filter((d) => d.z > 0)
-    ),
-    [bins, groupKeys]
+  const scatterData = useMemo(
+    () =>
+      groupKeys.map((key, yi) =>
+        bins
+          .map((b) => ({
+            x: b.midpoint,
+            y: yi,
+            z: b.byGroup[key] ?? 0,
+            label: b.label,
+            fullLabel: b.fullLabel,
+            avg: b.avgByGroup[key] ?? 0,
+            group: key,
+          }))
+          .filter((d) => d.z > 0),
+      ),
+    [bins, groupKeys],
   );
 
   const yTicks = groupKeys.map((_, i) => i);
@@ -717,7 +676,9 @@ function BubbleMatrix({ bins, groupKeys, groupBy }: BubbleMatrixProps) {
             cursor={false}
             content={({ payload }) => {
               if (!payload?.length) return null;
-              const d = payload[0]?.payload as { x: number; fullLabel: string; group: string; z: number; avg: number } | undefined;
+              const d = payload[0]?.payload as
+                | { x: number; fullLabel: string; group: string; z: number; avg: number }
+                | undefined;
               if (!d) return null;
               return (
                 <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow text-xs space-y-0.5">
@@ -748,7 +709,7 @@ function BubbleMatrix({ bins, groupKeys, groupBy }: BubbleMatrixProps) {
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: React.ReactNode }[] = [
   { value: "light", label: "Light", icon: <Sun size={14} /> },
-  { value: "dark",  label: "Dark",  icon: <Moon size={14} /> },
+  { value: "dark", label: "Dark", icon: <Moon size={14} /> },
   { value: "system", label: "System", icon: <Monitor size={14} /> },
 ];
 
@@ -781,7 +742,10 @@ function ThemeDropdown({ mode, onChange }: { mode: ThemeMode; onChange: (m: Them
           {THEME_OPTIONS.map((opt) => (
             <button
               key={opt.value}
-              onClick={() => { onChange(opt.value); setOpen(false); }}
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
               className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-left transition-colors cursor-pointer ${
                 mode === opt.value
                   ? "text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-950/60"
@@ -838,7 +802,7 @@ export default function App() {
   }, [themeMode]);
 
   function handleThemeChange(mode: ThemeMode) {
-    applyDarkClass(mode);                          // synchronous DOM update
+    applyDarkClass(mode); // synchronous DOM update
     localStorage.setItem(THEME_STORAGE_KEY, mode);
     setThemeMode(mode);
   }
@@ -874,14 +838,12 @@ export default function App() {
       setLocalMonths(available);
 
       // Load the most recent available month as the default dataset.
-      const defaultKey =
-        MONTH_CATALOG.find((m) => available.has(m.key))?.key ?? null;
+      const defaultKey = MONTH_CATALOG.find((m) => available.has(m.key))?.key ?? null;
       if (defaultKey) {
         setSelectedMonth(defaultKey);
         const r = await fetch(`${import.meta.env.BASE_URL}rental-bonds-${defaultKey}.json`);
         const ct = r.headers.get("content-type") ?? "";
-        const defaultData: RentalBond[] =
-          r.ok && ct.includes("application/json") ? await r.json() : [];
+        const defaultData: RentalBond[] = r.ok && ct.includes("application/json") ? await r.json() : [];
         logDataStats(`init — rental-bonds-${defaultKey}.json`, defaultData);
         setData(defaultData);
       }
@@ -896,26 +858,15 @@ export default function App() {
 
   const filtered = useMemo(() => {
     return data.filter((r) => {
-      if (
-        filters.dwellingTypes.length > 0 &&
-        !filters.dwellingTypes.includes(r.dwellingType)
-      )
-        return false;
+      if (filters.dwellingTypes.length > 0 && !filters.dwellingTypes.includes(r.dwellingType)) return false;
       if (filters.bedrooms.length > 0) {
         if (r.bedrooms == null) return false;
-        const match = filters.bedrooms.some((b) =>
-          b >= 5 ? r.bedrooms! >= 5 : r.bedrooms === b,
-        );
+        const match = filters.bedrooms.some((b) => (b >= 5 ? r.bedrooms! >= 5 : r.bedrooms === b));
         if (!match) return false;
       }
-      if (
-        filters.postcodes.length > 0 &&
-        !filters.postcodes.includes(r.postcode)
-      )
-        return false;
+      if (filters.postcodes.length > 0 && !filters.postcodes.includes(r.postcode)) return false;
       if (r.weeklyRent < filters.rentMin) return false;
-      if (filters.rentMax < RENT_ABS_MAX && r.weeklyRent > filters.rentMax)
-        return false;
+      if (filters.rentMax < RENT_ABS_MAX && r.weeklyRent > filters.rentMax) return false;
       return true;
     });
   }, [data, filters]);
@@ -928,8 +879,7 @@ export default function App() {
       if (av == null && bv == null) cmp = 0;
       else if (av == null) cmp = 1;
       else if (bv == null) cmp = -1;
-      else if (typeof av === "string" && typeof bv === "string")
-        cmp = av.localeCompare(bv);
+      else if (typeof av === "string" && typeof bv === "string") cmp = av.localeCompare(bv);
       else cmp = (av as number) - (bv as number);
       return sortDir === "asc" ? cmp : -cmp;
     });
@@ -944,9 +894,7 @@ export default function App() {
       if (arr) arr.push(r);
       else map.set(key, [r]);
     }
-    return [...map.entries()].sort(([a], [b]) =>
-      a.localeCompare(b, undefined, { numeric: true }),
-    );
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
   }, [sorted, groupBy]);
 
   const stats = useMemo(() => {
@@ -968,9 +916,7 @@ export default function App() {
     if (filtered.length === 0) return { chartBins: [], chartGroupKeys: [] };
 
     // Exclude nonsensical bedroom counts (>10) from chart data
-    const chartData = filtered.filter(
-      (r) => r.bedrooms === null || r.bedrooms <= 10,
-    );
+    const chartData = filtered.filter((r) => r.bedrooms === null || r.bedrooms <= 10);
     if (chartData.length === 0) return { chartBins: [], chartGroupKeys: [] };
 
     const rents = chartData.map((r) => r.weeklyRent);
@@ -1024,16 +970,11 @@ export default function App() {
     bins.forEach((b, i) => {
       b.avg = b.total > 0 ? Math.round(sumTotal[i] / b.total) : 0;
       for (const gk of Object.keys(b.byGroup)) {
-        b.avgByGroup[gk] =
-          b.byGroup[gk] > 0
-            ? Math.round(sumByGroup[gk][i] / b.byGroup[gk])
-            : 0;
+        b.avgByGroup[gk] = b.byGroup[gk] > 0 ? Math.round(sumByGroup[gk][i] / b.byGroup[gk]) : 0;
       }
     });
 
-    const groupKeys = [...groupKeySet].sort((a, b) =>
-      a.localeCompare(b, undefined, { numeric: true }),
-    );
+    const groupKeys = [...groupKeySet].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     return { chartBins: bins, chartGroupKeys: groupKeys };
   }, [filtered, chartGroupBy]);
 
@@ -1051,31 +992,21 @@ export default function App() {
     if (!hasActiveFilters) return "All Rental Bonds";
     const parts: string[] = [];
     if (filters.dwellingTypes.length > 0) {
-      parts.push(
-        filters.dwellingTypes
-          .map((t) => DWELLING_TYPE_LABELS[t] ?? t)
-          .join(", "),
-      );
+      parts.push(filters.dwellingTypes.map((t) => DWELLING_TYPE_LABELS[t] ?? t).join(", "));
     }
     if (filters.bedrooms.length > 0) {
       const labels = filters.bedrooms
-        .map(
-          (b) =>
-            BEDROOM_OPTIONS.find((o) => o.value === b)?.label ?? `${b} Bed`,
-        )
+        .map((b) => BEDROOM_OPTIONS.find((o) => o.value === b)?.label ?? `${b} Bed`)
         .join(", ");
       parts.push(labels);
     }
     if (filters.postcodes.length > 0) {
       parts.push(`postcodes ${filters.postcodes.join(", ")}`);
     }
-    const rentChanged =
-      filters.rentMin > RENT_ABS_MIN || filters.rentMax < RENT_ABS_MAX;
+    const rentChanged = filters.rentMin > RENT_ABS_MIN || filters.rentMax < RENT_ABS_MAX;
     if (rentChanged) {
       const maxLabel =
-        filters.rentMax >= RENT_ABS_MAX
-          ? formatCurrency(filters.rentMax) + "+"
-          : formatCurrency(filters.rentMax);
+        filters.rentMax >= RENT_ABS_MAX ? formatCurrency(filters.rentMax) + "+" : formatCurrency(filters.rentMax);
       parts.push(`${formatCurrency(filters.rentMin)} – ${maxLabel}/wk`);
     }
     return parts.join(" · ");
@@ -1164,14 +1095,11 @@ export default function App() {
     setDownloading(false);
   }
 
-  const sortIndicator = (field: SortField) =>
-    sortField === field ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+  const sortIndicator = (field: SortField) => (sortField === field ? (sortDir === "asc" ? " ↑" : " ↓") : "");
 
   function renderTable(items: RentalBond[], paginate: boolean) {
     const start = paginate ? page * pageSize : 0;
-    const pageItems = paginate
-      ? items.slice(start, start + pageSize)
-      : items.slice(0, PAGE_SIZE);
+    const pageItems = paginate ? items.slice(start, start + pageSize) : items.slice(0, PAGE_SIZE);
     const totalPages = paginate ? Math.ceil(items.length / pageSize) : 1;
 
     return (
@@ -1227,11 +1155,7 @@ export default function App() {
                   {DWELLING_TYPE_LABELS[r.dwellingType] ?? r.dwellingType}
                 </td>
                 <td className="px-4 py-2.5 text-sm border-b border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300">
-                  {r.bedrooms == null
-                    ? "–"
-                    : r.bedrooms === 0
-                      ? "Studio"
-                      : r.bedrooms}
+                  {r.bedrooms == null ? "–" : r.bedrooms === 0 ? "Studio" : r.bedrooms}
                 </td>
                 <td className="px-4 py-2.5 text-sm border-b border-gray-100 dark:border-gray-800 font-semibold tabular-nums text-gray-900 dark:text-gray-100">
                   {formatCurrency(r.weeklyRent)}/wk
@@ -1274,7 +1198,9 @@ export default function App() {
                 <option value={20}>20 rows</option>
                 <option value={50}>50 rows</option>
               </select>
-              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[0.6rem] text-gray-400 dark:text-gray-500">&#9660;</span>
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[0.6rem] text-gray-400 dark:text-gray-500">
+                &#9660;
+              </span>
             </div>
           </div>
         )}
@@ -1296,12 +1222,10 @@ export default function App() {
       </div>
     );
 
-  const dwellingOptions = Object.entries(DWELLING_TYPE_LABELS).map(
-    ([code, label]) => ({
-      value: code,
-      label,
-    }),
-  );
+  const dwellingOptions = Object.entries(DWELLING_TYPE_LABELS).map(([code, label]) => ({
+    value: code,
+    label,
+  }));
 
   const bedroomSelectOptions = BEDROOM_OPTIONS.map((b) => ({
     value: String(b.value),
@@ -1311,293 +1235,270 @@ export default function App() {
   return (
     <>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        <header className="mb-6">
-          <div className="flex items-center justify-between gap-3 mb-0.5">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-600 shadow-sm shrink-0">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="w-6 h-6 text-white"
-                >
-                  <path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z" />
-                  <path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a1.03 1.03 0 0 0 .091-.086L12 5.432Z" />
-                </svg>
+        <div className="max-w-5xl mx-auto px-4 py-6">
+          <header className="mb-6">
+            <div className="flex items-center justify-between gap-3 mb-0.5">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-600 shadow-sm shrink-0">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="w-6 h-6 text-white"
+                  >
+                    <path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z" />
+                    <path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a1.03 1.03 0 0 0 .091-.086L12 5.432Z" />
+                  </svg>
+                </div>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">NSW Rental Price Explorer</h1>
               </div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                NSW Rental Price Explorer
-              </h1>
+              <ThemeDropdown mode={themeMode} onChange={handleThemeChange} />
             </div>
-            <ThemeDropdown mode={themeMode} onChange={handleThemeChange} />
-          </div>
-          <div className="text-gray-500 dark:text-gray-400 text-sm mt-1 flex items-center gap-1.5 flex-wrap">
-            <span>Bond lodgements from</span>
-            <select
-              value={selectedMonth}
-              onChange={(e) => handleMonthChange(e.target.value)}
-              className="text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded px-2 py-0.5 text-sm cursor-pointer focus:outline-none focus:border-indigo-600"
-            >
-              {MONTH_CATALOG.filter(
-                (m) => import.meta.env.DEV || localMonths.has(m.key),
-              ).map((m) => (
-                <option key={m.key} value={m.key}>
-                  {m.label}
-                  {!localMonths.has(m.key) ? " (download required)" : ""}
-                </option>
-              ))}
-            </select>
-            {import.meta.env.DEV && !localMonths.has(selectedMonth) && (
-              <button
-                onClick={handleDownload}
-                className="px-2.5 py-0.5 bg-indigo-600 text-white text-xs font-semibold rounded cursor-pointer hover:bg-indigo-700 transition-colors"
+            <div className="text-gray-500 dark:text-gray-400 text-sm mt-1 flex items-center gap-1.5 flex-wrap">
+              <span>Bond lodgements from</span>
+              <select
+                value={selectedMonth}
+                onChange={(e) => handleMonthChange(e.target.value)}
+                className="text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded px-2 py-0.5 text-sm cursor-pointer focus:outline-none focus:border-indigo-600"
               >
-                Download
-              </button>
-            )}
-            <span>
-              &middot; Source:{" "}
-              <a
-                href="https://nsw.gov.au/housing-and-construction/rental-forms-surveys-and-data/rental-bond-data"
-                target="_blank"
-                rel="noopener"
-                className="text-indigo-600 hover:underline"
-              >
-                NSW Fair Trading
-              </a>
-            </span>
-          </div>
-        </header>
-
-        {error && data.length > 0 && (
-          <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 rounded-lg text-red-700 dark:text-red-400 text-sm flex items-center justify-between">
-            <span>{error}</span>
-            <button
-              onClick={() => setError(null)}
-              className="text-red-400 hover:text-red-700 dark:hover:text-red-300 text-lg leading-none px-1 cursor-pointer"
-            >
-              &times;
-            </button>
-          </div>
-        )}
-
-        <div className="bg-white dark:bg-gray-900 rounded-xl mb-5 shadow-sm border border-gray-200 dark:border-gray-700">
-          <div
-            className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl"
-            onClick={() => setFiltersOpen((o) => !o)}
-          >
-            <div className="flex items-center gap-2.5">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Filters
-              </h2>
-              {hasActiveFilters && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400" />
-                  Active
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {hasActiveFilters && (
+                {MONTH_CATALOG.filter((m) => import.meta.env.DEV || localMonths.has(m.key)).map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {m.label}
+                    {!localMonths.has(m.key) ? " (download required)" : ""}
+                  </option>
+                ))}
+              </select>
+              {import.meta.env.DEV && !localMonths.has(selectedMonth) && (
                 <button
-                  className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    resetFilters();
-                  }}
+                  onClick={handleDownload}
+                  className="px-2.5 py-0.5 bg-indigo-600 text-white text-xs font-semibold rounded cursor-pointer hover:bg-indigo-700 transition-colors"
                 >
-                  Reset
+                  Download
                 </button>
               )}
-              <span className="flex items-center justify-center w-7 h-7 rounded-md text-gray-400 dark:text-gray-500 text-[0.7rem] cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300">
-                <span
-                  className={`inline-block transition-transform duration-200 ${filtersOpen ? "rotate-90" : ""}`}
+              <span>
+                &middot; Source:{" "}
+                <a
+                  href="https://nsw.gov.au/housing-and-construction/rental-forms-surveys-and-data/rental-bond-data"
+                  target="_blank"
+                  rel="noopener"
+                  className="text-indigo-600 hover:underline"
                 >
-                  &#9654;
-                </span>
+                  NSW Fair Trading
+                </a>
               </span>
             </div>
-          </div>
-          <div className={`filters-body ${filtersOpen ? "open" : "closed"}`}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
-                  Dwelling Type
-                </label>
-                <MultiSelect
-                  options={dwellingOptions}
-                  selected={filters.dwellingTypes}
-                  onChange={(v) =>
-                    setFilters((f) => ({ ...f, dwellingTypes: v }))
-                  }
-                  placeholder="All types"
-                />
-              </div>
+          </header>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
-                  Bedrooms
-                </label>
-                <MultiSelect
-                  options={bedroomSelectOptions}
-                  selected={filters.bedrooms.map(String)}
-                  onChange={(v) =>
-                    setFilters((f) => ({ ...f, bedrooms: v.map(Number) }))
-                  }
-                  placeholder="Any"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
-                  Postcode
-                </label>
-                <TagInput
-                  tags={filters.postcodes}
-                  onChange={(postcodes) =>
-                    setFilters((f) => ({ ...f, postcodes }))
-                  }
-                  placeholder="Type postcode + Enter"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
-                  Weekly Rent
-                </label>
-                <RangeSlider
-                  min={RENT_ABS_MIN}
-                  max={RENT_ABS_MAX}
-                  step={RENT_STEP}
-                  valueMin={filters.rentMin}
-                  valueMax={filters.rentMax}
-                  onChange={(rentMin, rentMax) =>
-                    setFilters((f) => ({ ...f, rentMin, rentMax }))
-                  }
-                />
-              </div>
+          {error && data.length > 0 && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 rounded-lg text-red-700 dark:text-red-400 text-sm flex items-center justify-between">
+              <span>{error}</span>
+              <button
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-red-700 dark:hover:text-red-300 text-lg leading-none px-1 cursor-pointer"
+              >
+                &times;
+              </button>
             </div>
-          </div>
-        </div>
+          )}
 
-        {data.length === 0 ? (
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center py-16 px-8 text-center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              className="w-12 h-12 text-indigo-200 dark:text-indigo-900 mb-4"
+          <div className="bg-white dark:bg-gray-900 rounded-xl mb-5 shadow-sm border border-gray-200 dark:border-gray-700">
+            <div
+              className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl"
+              onClick={() => setFiltersOpen((o) => !o)}
             >
-              <path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z" />
-              <path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a1.03 1.03 0 0 0 .091-.086L12 5.432Z" />
-            </svg>
-            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-1">
-              No data loaded
-            </h3>
-            <p className="text-gray-500 dark:text-gray-400 text-sm max-w-sm">
-              Select a month above and click{" "}
-              <span className="font-semibold text-indigo-600 dark:text-indigo-400">Download</span> to
-              fetch rental bond data from NSW Fair Trading.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="bg-white dark:bg-gray-900 rounded-xl px-5 py-4 mb-5 shadow-sm border border-gray-200 dark:border-gray-700">
-              <div className="mb-3">
-                <h3 className="text-base font-semibold text-gray-700 dark:text-gray-300">
-                  Summary for{" "}
-                  <span className="text-indigo-600 dark:text-indigo-400">{filterSummary}</span>
-                </h3>
-              </div>
-              {stats && (
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-indigo-50 dark:bg-indigo-950/60 rounded-lg px-4 py-3.5 border border-indigo-100 dark:border-indigo-900">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
-                      Min Rent
-                    </div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                      {formatCurrency(stats.min)}/wk
-                    </div>
-                  </div>
-                  <div className="bg-indigo-50 dark:bg-indigo-950/60 rounded-lg px-4 py-3.5 border border-indigo-100 dark:border-indigo-900">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
-                      Avg Rent
-                    </div>
-                    <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                      {formatCurrency(stats.avg)}/wk
-                    </div>
-                  </div>
-                  <div className="bg-indigo-50 dark:bg-indigo-950/60 rounded-lg px-4 py-3.5 border border-indigo-100 dark:border-indigo-900">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
-                      Max Rent
-                    </div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                      {formatCurrency(stats.max)}/wk
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700">
-              {/* Card header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                  {filtered.length.toLocaleString()} result
-                  {filtered.length !== 1 ? "s" : ""} out of{" "}
-                  {data.length.toLocaleString()} bond lodgements
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Filters
                 </h2>
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Group by
-                  <div className="relative">
-                    <select
-                      value={groupBy}
-                      onChange={(e) =>
-                        setGroupBy(e.target.value as GroupByField)
-                      }
-                      className="appearance-none pl-3 pr-8 py-1.5 min-h-[34px] border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 font-normal cursor-pointer transition-colors hover:border-gray-400 dark:hover:border-gray-500 focus:outline-none focus:border-indigo-600 focus:ring-3 focus:ring-indigo-600/10"
-                    >
-                      <option value="none">None</option>
-                      <option value="dwellingType">Dwelling Type</option>
-                      <option value="bedrooms">Bedrooms</option>
-                      <option value="postcode">
-                        {viewTab === "graphs" ? "Postcode Region" : "Postcode"}
-                      </option>
-                    </select>
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-gray-400 dark:text-gray-500">&#9660;</span>
-                  </div>
-                </label>
+                {hasActiveFilters && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400" />
+                    Active
+                  </span>
+                )}
               </div>
-
-              {/* Tab strip */}
-              <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-5">
-                {(["table", "graphs"] as const).map((tab) => (
+              <div className="flex items-center gap-2">
+                {hasActiveFilters && (
                   <button
-                    key={tab}
-                    onClick={() => setViewTab(tab)}
-                    className={`px-4 py-2.5 text-sm font-semibold capitalize border-b-2 -mb-px transition-colors cursor-pointer ${
-                      viewTab === tab
-                        ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400"
-                        : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600"
-                    }`}
+                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      resetFilters();
+                    }}
                   >
-                    {tab === "table" ? "Table" : "Graphs"}
+                    Reset
                   </button>
-                ))}
+                )}
+                <span className="flex items-center justify-center w-7 h-7 rounded-md text-gray-400 dark:text-gray-500 text-[0.7rem] cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300">
+                  <span className={`inline-block transition-transform duration-200 ${filtersOpen ? "rotate-90" : ""}`}>
+                    &#9654;
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div className={`filters-body ${filtersOpen ? "open" : "closed"}`}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
+                    Dwelling Type
+                  </label>
+                  <MultiSelect
+                    options={dwellingOptions}
+                    selected={filters.dwellingTypes}
+                    onChange={(v) => setFilters((f) => ({ ...f, dwellingTypes: v }))}
+                    placeholder="All types"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
+                    Bedrooms
+                  </label>
+                  <MultiSelect
+                    options={bedroomSelectOptions}
+                    selected={filters.bedrooms.map(String)}
+                    onChange={(v) => setFilters((f) => ({ ...f, bedrooms: v.map(Number) }))}
+                    placeholder="Any"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
+                    Postcode
+                  </label>
+                  <TagInput
+                    tags={filters.postcodes}
+                    onChange={(postcodes) => setFilters((f) => ({ ...f, postcodes }))}
+                    placeholder="Type postcode + Enter"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
+                    Weekly Rent
+                  </label>
+                  <RangeSlider
+                    min={RENT_ABS_MIN}
+                    max={RENT_ABS_MAX}
+                    step={RENT_STEP}
+                    valueMin={filters.rentMin}
+                    valueMax={filters.rentMax}
+                    onChange={(rentMin, rentMax) => setFilters((f) => ({ ...f, rentMin, rentMax }))}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {data.length === 0 ? (
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center py-16 px-8 text-center">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="w-12 h-12 text-indigo-200 dark:text-indigo-900 mb-4"
+              >
+                <path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z" />
+                <path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a1.03 1.03 0 0 0 .091-.086L12 5.432Z" />
+              </svg>
+              <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-1">No data loaded</h3>
+              <p className="text-gray-500 dark:text-gray-400 text-sm max-w-sm">
+                Select a month above and click{" "}
+                <span className="font-semibold text-indigo-600 dark:text-indigo-400">Download</span> to fetch rental
+                bond data from NSW Fair Trading.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-white dark:bg-gray-900 rounded-xl px-5 py-4 mb-5 shadow-sm border border-gray-200 dark:border-gray-700">
+                <div className="mb-3">
+                  <h3 className="text-base font-semibold text-gray-700 dark:text-gray-300">
+                    Summary for <span className="text-indigo-600 dark:text-indigo-400">{filterSummary}</span>
+                  </h3>
+                </div>
+                {stats && (
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-indigo-50 dark:bg-indigo-950/60 rounded-lg px-4 py-3.5 border border-indigo-100 dark:border-indigo-900">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+                        Min Rent
+                      </div>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                        {formatCurrency(stats.min)}/wk
+                      </div>
+                    </div>
+                    <div className="bg-indigo-50 dark:bg-indigo-950/60 rounded-lg px-4 py-3.5 border border-indigo-100 dark:border-indigo-900">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+                        Avg Rent
+                      </div>
+                      <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                        {formatCurrency(stats.avg)}/wk
+                      </div>
+                    </div>
+                    <div className="bg-indigo-50 dark:bg-indigo-950/60 rounded-lg px-4 py-3.5 border border-indigo-100 dark:border-indigo-900">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+                        Max Rent
+                      </div>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                        {formatCurrency(stats.max)}/wk
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Tab content */}
-              {viewTab === "table" ? (
-                grouped
-                  ? grouped.map(([key, items]) => {
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700">
+                {/* Card header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                    {filtered.length.toLocaleString()} result
+                    {filtered.length !== 1 ? "s" : ""} out of {data.length.toLocaleString()} bond lodgements
+                  </h2>
+                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    Group by
+                    <div className="relative">
+                      <select
+                        value={groupBy}
+                        onChange={(e) => setGroupBy(e.target.value as GroupByField)}
+                        className="appearance-none pl-3 pr-8 py-1.5 min-h-[34px] border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 font-normal cursor-pointer transition-colors hover:border-gray-400 dark:hover:border-gray-500 focus:outline-none focus:border-indigo-600 focus:ring-3 focus:ring-indigo-600/10"
+                      >
+                        <option value="none">None</option>
+                        <option value="dwellingType">Dwelling Type</option>
+                        <option value="bedrooms">Bedrooms</option>
+                        <option value="postcode">{viewTab === "graphs" ? "Postcode Region" : "Postcode"}</option>
+                      </select>
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-gray-400 dark:text-gray-500">
+                        &#9660;
+                      </span>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Tab strip */}
+                <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-5">
+                  {(["table", "graphs"] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setViewTab(tab)}
+                      className={`px-4 py-2.5 text-sm font-semibold capitalize border-b-2 -mb-px transition-colors cursor-pointer ${
+                        viewTab === tab
+                          ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400"
+                          : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600"
+                      }`}
+                    >
+                      {tab === "table" ? "Table" : "Graphs"}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Tab content */}
+                {viewTab === "table" ? (
+                  grouped ? (
+                    grouped.map(([key, items]) => {
                       const s = groupStats(items);
                       const isOpen = expandedGroups.has(key);
                       return (
-                        <div
-                          key={key}
-                          className="border-b border-gray-100 dark:border-gray-800 last:border-b-0"
-                        >
+                        <div key={key} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0">
                           <div
                             className="flex items-center justify-between px-5 py-3 bg-gray-50 dark:bg-gray-800/50 cursor-pointer select-none transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
                             onClick={() => toggleGroup(key)}
@@ -1614,46 +1515,34 @@ export default function App() {
                               </span>
                             </h3>
                             <div className="flex gap-4 text-sm text-gray-500 dark:text-gray-400">
-                              <span className="whitespace-nowrap">
-                                Avg {formatCurrency(s.avg)}/wk
-                              </span>
-                              <span className="whitespace-nowrap">
-                                Median {formatCurrency(s.median)}/wk
-                              </span>
+                              <span className="whitespace-nowrap">Avg {formatCurrency(s.avg)}/wk</span>
+                              <span className="whitespace-nowrap">Median {formatCurrency(s.median)}/wk</span>
                             </div>
                           </div>
                           {isOpen && renderTable(items, false)}
                         </div>
                       );
                     })
-                  : renderTable(sorted, true)
-              ) : (
-                <div className="p-5 space-y-8 bg-white dark:bg-gray-900">
-                  <HistogramChart
-                    bins={chartBins}
-                    groupKeys={chartGroupKeys}
-                    groupBy={chartGroupBy}
-                  />
-                  {chartGroupBy !== "none" && chartGroupKeys.length > 0 && (
-                    <BubbleMatrix
-                      bins={chartBins}
-                      groupKeys={chartGroupKeys}
-                      groupBy={chartGroupBy}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+                  ) : (
+                    renderTable(sorted, true)
+                  )
+                ) : (
+                  <div className="p-5 space-y-8 bg-white dark:bg-gray-900">
+                    <HistogramChart bins={chartBins} groupKeys={chartGroupKeys} groupBy={chartGroupBy} />
+                    {chartGroupBy !== "none" && chartGroupKeys.length > 0 && (
+                      <BubbleMatrix bins={chartBins} groupKeys={chartGroupKeys} groupBy={chartGroupBy} />
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
       {downloading && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="spinner" />
-          <p className="text-white text-lg font-medium mt-4">
-            Downloading and processing...
-          </p>
+          <p className="text-white text-lg font-medium mt-4">Downloading and processing...</p>
           <button
             onClick={handleCancelDownload}
             className="mt-4 px-4 py-2 bg-white text-gray-900 rounded-md font-medium cursor-pointer hover:bg-gray-100 transition-colors"

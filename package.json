@@ -1,5 +1,5 @@
 {
-  "name": "react-typescript-demo",
+  "name": "nsw-rental-price-explorer",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -7,7 +7,9 @@
     "dev": "vite",
     "cleanup": "lsof -ti :5173-5178 | xargs kill -9 2>/dev/null || true",
     "clean": "rm -rf dist public/rental-bonds-*.json public/available-months.json .pnpm-store",
-    "build": "vite build",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"*.{js,json,html}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.{js,json,html}\"",
+    "build": "pnpm format:check && vite build",
     "preview": "vite preview",
     "download-all": "tsx scripts/download-all.ts"
   },
@@ -24,6 +26,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.0",
+    "prettier": "^3.8.1",
     "tailwindcss": "^4.2.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",

@@ -42,6 +42,7 @@ export interface MonthEntry {
 
 const P = "/api/nsw-data/sites/default/files/noindex";
 
+// Hardcoded because NSW Fair Trading uses irregular filenames, casing, separators, and folder paths.
 export const MONTH_CATALOG: MonthEntry[] = [
   { key: "2026-01", label: "January 2026", url: `${P}/2026-02/rentalbond_lodgements_january_2026.xlsx` },
   { key: "2025-12", label: "December 2025", url: `${P}/2026-01/rentalbond_lodgements_december_2025.xlsx` },
