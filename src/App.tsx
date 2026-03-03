@@ -766,7 +766,7 @@ export default function App() {
 
       if (import.meta.env.PROD) {
         // In production, read the pre-built manifest written by `pnpm download-all`.
-        const res = await fetch("/available-months.json");
+        const res = await fetch(`${import.meta.env.BASE_URL}available-months.json`);
         const keys: string[] = res.ok ? await res.json() : [];
         available = new Set(keys);
       } else {
@@ -775,7 +775,7 @@ export default function App() {
         const checks = await Promise.all(
           MONTH_CATALOG.map(async (m) => {
             try {
-              const res = await fetch(`/rental-bonds-${m.key}.json`, {
+              const res = await fetch(`${import.meta.env.BASE_URL}rental-bonds-${m.key}.json`, {
                 method: "HEAD",
               });
               const ct = res.headers.get("content-type") ?? "";
@@ -795,7 +795,7 @@ export default function App() {
         MONTH_CATALOG.find((m) => available.has(m.key))?.key ?? null;
       if (defaultKey) {
         setSelectedMonth(defaultKey);
-        const r = await fetch(`/rental-bonds-${defaultKey}.json`);
+        const r = await fetch(`${import.meta.env.BASE_URL}rental-bonds-${defaultKey}.json`);
         const ct = r.headers.get("content-type") ?? "";
         const defaultData: RentalBond[] =
           r.ok && ct.includes("application/json") ? await r.json() : [];
@@ -1031,7 +1031,7 @@ export default function App() {
     setSelectedMonth(monthKey);
     if (localMonths.has(monthKey)) {
       try {
-        const res = await fetch(`/rental-bonds-${monthKey}.json`);
+        const res = await fetch(`${import.meta.env.BASE_URL}rental-bonds-${monthKey}.json`);
         if (!res.ok) throw new Error("Failed to load data");
         const d: RentalBond[] = await res.json();
         logDataStats(`handleMonthChange — rental-bonds-${monthKey}.json`, d);
@@ -1257,9 +1257,7 @@ export default function App() {
               ).map((m) => (
                 <option key={m.key} value={m.key}>
                   {m.label}
-                  {import.meta.env.DEV && localMonths.has(m.key)
-                    ? " (local)"
-                    : ""}
+                  {!localMonths.has(m.key) ? " (download required)" : ""}
                 </option>
               ))}
             </select>
