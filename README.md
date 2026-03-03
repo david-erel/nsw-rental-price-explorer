@@ -1,5 +1,7 @@
 # NSW Rental Price Explorer
 
+**[Live site →](https://david-erel.github.io/nsw-rental-price-explorer/)**
+
 A single-page browser app for exploring NSW rental bond lodgement data published by NSW Fair Trading. Select a month, download the data, and filter or group it to understand rental prices across the state.
 
 ## What it does

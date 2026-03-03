@@ -39,6 +39,7 @@ function saveJsonPlugin() {
 }
 
 export default defineConfig({
+  base: "/nsw-rental-price-explorer/",
   plugins: [react(), tailwindcss(), saveJsonPlugin()],
   server: {
     proxy: {
