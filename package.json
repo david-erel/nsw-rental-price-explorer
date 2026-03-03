@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite",
     "cleanup": "lsof -ti :5173-5178 | xargs kill -9 2>/dev/null || true",
-    "clean": "rm -rf dist public/rental-bonds-*.json .pnpm-store",
+    "clean": "rm -rf dist public/rental-bonds-*.json public/available-months.json .pnpm-store",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "download-all": "tsx scripts/download-all.ts"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -22,6 +23,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.0",
     "tailwindcss": "^4.2.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^6.2.0"
   },

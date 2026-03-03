@@ -23,15 +23,56 @@ Open [http://localhost:5173](http://localhost:5173), select a month from the dro
 
 ## Scripts
 
-| Command        | Description                                      |
-| -------------- | ------------------------------------------------ |
-| `pnpm dev`     | Start the Vite dev server                        |
-| `pnpm build`   | Production build to `dist/`                      |
-| `pnpm preview` | Preview the production build                     |
-| `pnpm cleanup` | Kill any stale Vite processes on ports 5173–5178 |
-| `pnpm clean`   | Remove downloaded data files and build output    |
+| Command              | Description                                      |
+| -------------------- | ------------------------------------------------ |
+| `pnpm dev`           | Start the Vite dev server                        |
+| `pnpm build`         | Production build to `dist/`                      |
+| `pnpm preview`       | Preview the production build                     |
+| `pnpm download-all`  | Download all months and write the manifest       |
+| `pnpm cleanup`       | Kill any stale Vite processes on ports 5173–5178 |
+| `pnpm clean`         | Remove downloaded data files and build output    |
 
 > **Note:** Vite HMR doesn't work reliably on Google Drive-synced paths. After code changes, stop and restart the dev server (`pnpm cleanup && pnpm dev`).
+
+## Deploying as a standalone static site
+
+The app can be built into a fully self-contained static bundle with no backend or internet connection required at runtime.
+
+### Step 1 — Download all data
+
+```bash
+pnpm download-all
+```
+
+This fetches every monthly XLSX from NSW Fair Trading (server-side, so no CORS restrictions apply), parses each file, and writes the results to `public/`:
+
+- `public/rental-bonds-YYYY-MM.json` — one file per month
+- `public/available-months.json` — manifest listing every successfully downloaded month key
+
+Already-downloaded months are skipped automatically. Use `--force` to re-download everything.
+
+### Step 2 — Commit the data files
+
+The `public/` JSON files are intentionally tracked in git so the production build is fully reproducible from the repository alone.
+
+```bash
+git add public/
+git commit -m "Update rental bond data"
+```
+
+### Step 3 — Build and deploy
+
+```bash
+pnpm build
+```
+
+Deploy the `dist/` folder to any static host (GitHub Pages, Netlify, Vercel, S3, etc.). No server is needed.
+
+In production the app reads `available-months.json` on startup instead of probing for files, and only shows the months that were downloaded. The Download button is hidden — all data is already baked in.
+
+### Updating data monthly
+
+Re-run `pnpm download-all` (new months are added automatically as `MONTH_CATALOG` in `src/types.ts` is updated), commit, rebuild, and redeploy.
 
 ## Data source
 

@@ -762,8 +762,17 @@ export default function App() {
 
   useEffect(() => {
     async function init() {
-      const [checks, defaultData] = await Promise.all([
-        Promise.all(
+      let available: Set<string>;
+
+      if (import.meta.env.PROD) {
+        // In production, read the pre-built manifest written by `pnpm download-all`.
+        const res = await fetch("/available-months.json");
+        const keys: string[] = res.ok ? await res.json() : [];
+        available = new Set(keys);
+      } else {
+        // In development, probe each month via HEAD to discover which JSON
+        // files have been saved to public/ so far.
+        const checks = await Promise.all(
           MONTH_CATALOG.map(async (m) => {
             try {
               const res = await fetch(`/rental-bonds-${m.key}.json`, {
@@ -775,16 +784,25 @@ export default function App() {
               return null;
             }
           }),
-        ),
-        fetch("/rental-bonds-2025-01.json").then(async (r) => {
-          const ct = r.headers.get("content-type") ?? "";
-          if (!r.ok || !ct.includes("application/json")) return [];
-          return r.json() as Promise<RentalBond[]>;
-        }),
-      ]);
-      setLocalMonths(new Set(checks.filter((k): k is string => k != null)));
-      logDataStats("init — rental-bonds-2025-01.json", defaultData);
-      setData(defaultData);
+        );
+        available = new Set(checks.filter((k): k is string => k != null));
+      }
+
+      setLocalMonths(available);
+
+      // Load the most recent available month as the default dataset.
+      const defaultKey =
+        MONTH_CATALOG.find((m) => available.has(m.key))?.key ?? null;
+      if (defaultKey) {
+        setSelectedMonth(defaultKey);
+        const r = await fetch(`/rental-bonds-${defaultKey}.json`);
+        const ct = r.headers.get("content-type") ?? "";
+        const defaultData: RentalBond[] =
+          r.ok && ct.includes("application/json") ? await r.json() : [];
+        logDataStats(`init — rental-bonds-${defaultKey}.json`, defaultData);
+        setData(defaultData);
+      }
+
       setLoading(false);
     }
     init().catch((e) => {
@@ -1234,14 +1252,18 @@ export default function App() {
               onChange={(e) => handleMonthChange(e.target.value)}
               className="text-indigo-600 font-semibold bg-indigo-50 border border-indigo-200 rounded px-2 py-0.5 text-sm cursor-pointer focus:outline-none focus:border-indigo-600"
             >
-              {MONTH_CATALOG.map((m) => (
+              {MONTH_CATALOG.filter(
+                (m) => import.meta.env.DEV || localMonths.has(m.key),
+              ).map((m) => (
                 <option key={m.key} value={m.key}>
                   {m.label}
-                  {localMonths.has(m.key) ? " (local)" : ""}
+                  {import.meta.env.DEV && localMonths.has(m.key)
+                    ? " (local)"
+                    : ""}
                 </option>
               ))}
             </select>
-            {!localMonths.has(selectedMonth) && (
+            {import.meta.env.DEV && !localMonths.has(selectedMonth) && (
               <button
                 onClick={handleDownload}
                 className="px-2.5 py-0.5 bg-indigo-600 text-white text-xs font-semibold rounded cursor-pointer hover:bg-indigo-700 transition-colors"
