@@ -23,13 +23,13 @@ Open [http://localhost:5173](http://localhost:5173), select a month from the dro
 
 ## Scripts
 
-| Command | Description |
-|---|---|
-| `pnpm dev` | Start the Vite dev server |
-| `pnpm build` | Production build to `dist/` |
-| `pnpm preview` | Preview the production build |
+| Command        | Description                                      |
+| -------------- | ------------------------------------------------ |
+| `pnpm dev`     | Start the Vite dev server                        |
+| `pnpm build`   | Production build to `dist/`                      |
+| `pnpm preview` | Preview the production build                     |
 | `pnpm cleanup` | Kill any stale Vite processes on ports 5173–5178 |
-| `pnpm clean` | Remove downloaded data files and build output |
+| `pnpm clean`   | Remove downloaded data files and build output    |
 
 > **Note:** Vite HMR doesn't work reliably on Google Drive-synced paths. After code changes, stop and restart the dev server (`pnpm cleanup && pnpm dev`).
 
@@ -40,3 +40,7 @@ Open [http://localhost:5173](http://localhost:5173), select a month from the dro
 ## Tech stack
 
 React 19, TypeScript, Vite, Tailwind CSS v4
+
+## Screenshot
+
+![Screenshot of NSW Rental Price Explorer app](./assets/screenshot-example.png)
