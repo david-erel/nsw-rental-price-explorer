@@ -34,6 +34,20 @@ export const BEDROOM_OPTIONS: { value: number; label: string }[] = [
   { value: 5, label: "5+ Bedrooms" },
 ];
 
+export type SortField = "lodgementDate" | "postcode" | "dwellingType" | "bedrooms" | "weeklyRent";
+export type SortDir = "asc" | "desc";
+export type ThemeMode = "light" | "dark" | "system";
+
+export interface RentBin {
+  label: string;
+  fullLabel: string;
+  midpoint: number;
+  total: number;
+  avg: number;
+  byGroup: Record<string, number>;
+  avgByGroup: Record<string, number>;
+}
+
 export interface MonthEntry {
   key: string;
   label: string;

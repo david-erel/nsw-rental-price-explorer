@@ -1,8 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Sun, Moon, Monitor, ChevronDown } from "lucide-react";
-import type { RentalBond, Filters, GroupByField } from "./types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { RentalBond, Filters, GroupByField, SortField, SortDir, ThemeMode, RentBin } from "./types";
 import { DWELLING_TYPE_LABELS, BEDROOM_OPTIONS, MONTH_CATALOG } from "./types";
-import * as XLSX from "xlsx";
+import {
+  RENT_STEP,
+  RENT_ABS_MIN,
+  RENT_ABS_MAX,
+  PAGE_SIZE,
+  CHART_COLORS,
+  CHART_BIN_COUNT,
+  THEME_STORAGE_KEY,
+  applyDarkClass,
+  median,
+  formatCurrency,
+  groupLabel,
+  logDataStats,
+  parseXlsxData,
+  getPostcodeRegion,
+  formatPostcodeRegionKey,
+  groupStats,
+  filterBonds,
+  sortBonds,
+  groupBonds,
+} from "./utils";
 import {
   LineChart,
   Line,
@@ -16,432 +35,11 @@ import {
   Scatter,
   ZAxis,
 } from "recharts";
+import { MultiSelect } from "./components/MultiSelect";
+import { TagInput } from "./components/TagInput";
+import { RangeSlider } from "./components/RangeSlider";
+import { ThemeDropdown } from "./components/ThemeDropdown";
 import "./App.css";
-
-const RENT_STEP = 50;
-const RENT_ABS_MIN = 0;
-const RENT_ABS_MAX = 3000;
-const PAGE_SIZE = 50;
-const CHART_COLORS = ["#4f46e5", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
-const CHART_BIN_COUNT = 50;
-
-type SortField = "lodgementDate" | "postcode" | "dwellingType" | "bedrooms" | "weeklyRent";
-type SortDir = "asc" | "desc";
-type ThemeMode = "light" | "dark" | "system";
-
-const THEME_STORAGE_KEY = "nsw-explorer-theme";
-
-function applyDarkClass(mode: ThemeMode) {
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const isDark = mode === "dark" || (mode === "system" && prefersDark);
-  document.documentElement.classList.toggle("dark", isDark);
-}
-
-function median(arr: number[]): number {
-  const sorted = [...arr].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
-function formatCurrency(n: number): string {
-  return (
-    "$" +
-    n.toLocaleString("en-AU", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    })
-  );
-}
-
-function groupLabel(field: GroupByField, key: string): string {
-  if (field === "dwellingType") return DWELLING_TYPE_LABELS[key] ?? key;
-  if (field === "bedrooms") {
-    if (key === "null") return "Unknown";
-    return key === "0" ? "Studio" : `${key} Bed`;
-  }
-  return key;
-}
-
-// ── XLSX Parser ──
-
-function toNum(val: unknown): number {
-  if (typeof val === "number") return val;
-  const cleaned = String(val).replace(/[$,\s]/g, "");
-  const n = parseFloat(cleaned);
-  return isNaN(n) ? 0 : n;
-}
-
-function logDataStats(label: string, records: RentalBond[]) {
-  const zeros = records.filter((r) => r.weeklyRent === 0);
-  console.group(`[data] ${label}`);
-  console.log(`Total: ${records.length}, Zero-rent: ${zeros.length}`);
-  if (zeros.length > 0) console.log("First 3 zero-rent records:", zeros.slice(0, 3));
-  console.groupEnd();
-}
-
-function parseXlsxData(buffer: ArrayBuffer): RentalBond[] {
-  const workbook = XLSX.read(new Uint8Array(buffer), {
-    type: "array",
-    cellDates: true,
-  });
-
-  let rows: unknown[][] | null = null;
-  let headerIdx = -1;
-  for (const name of workbook.SheetNames) {
-    const sheet = workbook.Sheets[name];
-    const sheetRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
-    for (let i = 0; i < Math.min(sheetRows.length, 20); i++) {
-      const row = sheetRows[i];
-      if (Array.isArray(row) && row.some((c) => String(c).trim().toLowerCase() === "postcode")) {
-        headerIdx = i;
-        rows = sheetRows;
-        break;
-      }
-    }
-    if (rows) break;
-  }
-  if (!rows || headerIdx === -1) throw new Error("Could not find header row in XLSX");
-
-  const rawHeaders = rows[headerIdx] as unknown[];
-  const headers = rawHeaders.map((h) => String(h).trim().toLowerCase());
-  const col = {
-    date: headers.findIndex((h) => h.includes("lodgement") && h.includes("date")),
-    postcode: headers.findIndex((h) => h === "postcode"),
-    dwelling: headers.findIndex((h) => h.includes("dwelling")),
-    bedrooms: headers.findIndex((h) => h.includes("bedroom")),
-    rent: headers.findIndex((h) => h === "weekly rent"),
-  };
-
-  console.group("[parseXlsxData] Header detection");
-  console.log("Raw headers:", rawHeaders);
-  console.log("Normalised headers:", headers);
-  console.log("Column indices:", col);
-  console.groupEnd();
-
-  const firstDataRows = rows.slice(headerIdx + 1, headerIdx + 6);
-  console.group("[parseXlsxData] First 5 raw data rows");
-  firstDataRows.forEach((row, i) => {
-    const r = row as unknown[];
-    console.log(`Row ${i + 1}:`, {
-      date: {
-        idx: col.date,
-        raw: col.date >= 0 ? r[col.date] : "N/A",
-        type: typeof (col.date >= 0 ? r[col.date] : undefined),
-      },
-      postcode: {
-        idx: col.postcode,
-        raw: col.postcode >= 0 ? r[col.postcode] : "N/A",
-        type: typeof (col.postcode >= 0 ? r[col.postcode] : undefined),
-      },
-      dwelling: {
-        idx: col.dwelling,
-        raw: col.dwelling >= 0 ? r[col.dwelling] : "N/A",
-        type: typeof (col.dwelling >= 0 ? r[col.dwelling] : undefined),
-      },
-      bedrooms: {
-        idx: col.bedrooms,
-        raw: col.bedrooms >= 0 ? r[col.bedrooms] : "N/A",
-        type: typeof (col.bedrooms >= 0 ? r[col.bedrooms] : undefined),
-      },
-      rent: {
-        idx: col.rent,
-        raw: col.rent >= 0 ? r[col.rent] : "N/A",
-        type: typeof (col.rent >= 0 ? r[col.rent] : undefined),
-      },
-    });
-  });
-  console.groupEnd();
-
-  const result: RentalBond[] = [];
-  for (let i = headerIdx + 1; i < rows.length; i++) {
-    const row = rows[i] as unknown[];
-    if (!row || row.length === 0) continue;
-    const pc = row[col.postcode];
-    if (pc == null || isNaN(Number(pc)) || Number(pc) <= 0) continue;
-
-    const dateVal = col.date >= 0 ? row[col.date] : undefined;
-    let dateStr: string;
-    if (dateVal instanceof Date) {
-      const d = dateVal.getDate();
-      const m = dateVal.getMonth() + 1;
-      const y = dateVal.getFullYear();
-      dateStr = `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
-    } else {
-      dateStr = String(dateVal ?? "");
-    }
-
-    const beds = col.bedrooms >= 0 ? row[col.bedrooms] : undefined;
-    const rentRaw = col.rent >= 0 ? row[col.rent] : undefined;
-    if (rentRaw == null || String(rentRaw).trim() === "") continue;
-    const weeklyRent = toNum(rentRaw);
-    if (weeklyRent === 0) {
-      console.warn(`[parseXlsxData] Row ${i}: rent raw value produced 0`, {
-        rentRaw,
-        type: typeof rentRaw,
-      });
-      continue;
-    }
-    result.push({
-      lodgementDate: dateStr,
-      postcode: toNum(pc),
-      dwellingType: col.dwelling >= 0 ? String(row[col.dwelling] ?? "") : "",
-      bedrooms: beds != null && String(beds).trim() !== "" && String(beds).toLowerCase() !== "u" ? toNum(beds) : null,
-      weeklyRent,
-    });
-  }
-  logDataStats("parseXlsxData result", result);
-  return result;
-}
-
-// ── Multi-Select Dropdown ──
-
-function MultiSelect({
-  options,
-  selected,
-  onChange,
-  placeholder,
-}: {
-  options: { value: string; label: string }[];
-  selected: string[];
-  onChange: (values: string[]) => void;
-  placeholder: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  function toggle(value: string) {
-    onChange(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]);
-  }
-
-  const displayText =
-    selected.length === 0
-      ? null
-      : selected.length <= 2
-        ? selected.map((v) => options.find((o) => o.value === v)?.label ?? v).join(", ")
-        : `${selected.length} selected`;
-
-  return (
-    <div className={`multi-select relative ${open ? "open" : ""}`} ref={ref}>
-      <div
-        className="multi-select-trigger flex items-center justify-between w-full min-h-[34px] px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 cursor-pointer text-sm text-gray-900 dark:text-gray-100 transition-colors select-none hover:border-gray-400 dark:hover:border-gray-500"
-        onClick={() => setOpen((o) => !o)}
-      >
-        {displayText ? (
-          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{displayText}</span>
-        ) : (
-          <span className="text-gray-400 dark:text-gray-500">{placeholder}</span>
-        )}
-        <span className="arrow ml-2 text-[0.6rem] text-gray-400 dark:text-gray-500 transition-transform">&#9660;</span>
-      </div>
-      {open && (
-        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto p-1">
-          {options.map((opt) => (
-            <label
-              key={opt.value}
-              className="flex items-center gap-2 px-2.5 py-2 rounded-md cursor-pointer text-sm text-gray-900 dark:text-gray-100 transition-colors select-none hover:bg-gray-100 dark:hover:bg-gray-700"
-              onClick={() => toggle(opt.value)}
-            >
-              <input
-                type="checkbox"
-                checked={selected.includes(opt.value)}
-                onChange={() => {}}
-                className="accent-indigo-600 w-4 h-4 shrink-0"
-              />
-              {opt.label}
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Tag Input ──
-
-function TagInput({
-  tags,
-  onChange,
-  placeholder,
-}: {
-  tags: number[];
-  onChange: (tags: number[]) => void;
-  placeholder: string;
-}) {
-  const [inputValue, setInputValue] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function addTag() {
-    const trimmed = inputValue.trim();
-    const num = Number(trimmed);
-    if (trimmed === "" || isNaN(num)) return;
-    if (!tags.includes(num)) {
-      onChange([...tags, num]);
-    }
-    setInputValue("");
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      addTag();
-    }
-    if (e.key === "Backspace" && inputValue === "" && tags.length > 0) {
-      onChange(tags.slice(0, -1));
-    }
-  }
-
-  return (
-    <div
-      className="flex flex-wrap gap-1.5 px-2.5 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 min-h-[34px] items-center cursor-text transition-colors focus-within:border-indigo-600 focus-within:ring-3 focus-within:ring-indigo-600/10"
-      onClick={() => inputRef.current?.focus()}
-    >
-      {tags.map((tag) => (
-        <span
-          key={tag}
-          className="inline-flex items-center gap-1 px-2 py-px bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded text-xs font-medium whitespace-nowrap"
-        >
-          {tag}
-          <button
-            className="flex items-center justify-center bg-transparent border-none text-indigo-400 dark:text-indigo-500 cursor-pointer text-base leading-none p-0 ml-0.5 rounded-sm w-4 h-4 hover:text-indigo-700 hover:bg-indigo-200 dark:hover:text-indigo-300 dark:hover:bg-indigo-800"
-            onClick={(e) => {
-              e.stopPropagation();
-              onChange(tags.filter((t) => t !== tag));
-            }}
-          >
-            &times;
-          </button>
-        </span>
-      ))}
-      <input
-        ref={inputRef}
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={addTag}
-        placeholder={tags.length === 0 ? placeholder : ""}
-        className="border-none outline-none text-sm flex-1 min-w-[80px] py-0.5 bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-      />
-    </div>
-  );
-}
-
-// ── Range Slider ──
-
-function RangeSlider({
-  min,
-  max,
-  step,
-  valueMin,
-  valueMax,
-  onChange,
-}: {
-  min: number;
-  max: number;
-  step: number;
-  valueMin: number;
-  valueMax: number;
-  onChange: (low: number, high: number) => void;
-}) {
-  const leftPct = ((valueMin - min) / (max - min)) * 100;
-  const rightPct = ((valueMax - min) / (max - min)) * 100;
-
-  const handleMin = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const v = Number(e.target.value);
-      onChange(Math.min(v, valueMax - step), valueMax);
-    },
-    [onChange, valueMax, step],
-  );
-
-  const handleMax = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const v = Number(e.target.value);
-      onChange(valueMin, Math.max(v, valueMin + step));
-    },
-    [onChange, valueMin, step],
-  );
-
-  return (
-    <div className="py-0.5">
-      <div className="relative h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full my-2.5">
-        <div
-          className="absolute h-full bg-indigo-600 rounded-full"
-          style={{ left: `${leftPct}%`, width: `${rightPct - leftPct}%` }}
-        />
-      </div>
-      <div className="range-slider-inputs relative h-0">
-        <input type="range" min={min} max={max} step={step} value={valueMin} onChange={handleMin} />
-        <input type="range" min={min} max={max} step={step} value={valueMax} onChange={handleMax} />
-      </div>
-      <div className="flex justify-between text-sm font-semibold text-indigo-600 mt-0.5">
-        <span>{formatCurrency(valueMin)}</span>
-        <span>{valueMax >= max ? formatCurrency(valueMax) + "+" : formatCurrency(valueMax)}</span>
-      </div>
-      <div className="flex justify-between text-[0.65rem] text-gray-400 dark:text-gray-500 mt-px">
-        <span>{formatCurrency(min)}</span>
-        <span>{formatCurrency(max)}</span>
-      </div>
-    </div>
-  );
-}
-
-// ── Postcode regions ──
-// Inner Sydney split into 20-wide buckets (10 buckets), outer NSW in 100-wide buckets (7 buckets)
-
-const POSTCODE_REGIONS: Array<{ lo: number; hi: number; name: string }> = [
-  { lo: 2000, hi: 2019, name: "CBD · Kings Cross" },
-  { lo: 2020, hi: 2039, name: "Bondi · Eastern Suburbs" },
-  { lo: 2040, hi: 2059, name: "Inner West · Newtown" },
-  { lo: 2060, hi: 2079, name: "North Sydney · Chatswood" },
-  { lo: 2080, hi: 2099, name: "Mosman · Manly · Dee Why" },
-  { lo: 2100, hi: 2119, name: "Northern Beaches · Ryde" },
-  { lo: 2120, hi: 2139, name: "Strathfield · Hills District" },
-  { lo: 2140, hi: 2159, name: "Parramatta · Castle Hill" },
-  { lo: 2160, hi: 2179, name: "Liverpool · Fairfield" },
-  { lo: 2180, hi: 2199, name: "Canterbury · Bankstown" },
-  { lo: 2200, hi: 2299, name: "South Sydney · Central Coast" },
-  { lo: 2300, hi: 2399, name: "Newcastle · Hunter" },
-  { lo: 2400, hi: 2499, name: "Mid-North Coast · New England" },
-  { lo: 2500, hi: 2599, name: "Wollongong · Illawarra" },
-  { lo: 2600, hi: 2699, name: "Canberra · ACT Region" },
-  { lo: 2700, hi: 2799, name: "Penrith · Blue Mountains" },
-  { lo: 2800, hi: 2899, name: "Central NSW · Orange" },
-];
-
-function getPostcodeRegion(postcode: number) {
-  return POSTCODE_REGIONS.find((r) => postcode >= r.lo && postcode <= r.hi);
-}
-
-function formatPostcodeRegionKey(key: string) {
-  const [loStr, hiStr] = key.split("-");
-  const lo = Number(loStr);
-  const hi = Number(hiStr);
-  const region = POSTCODE_REGIONS.find((r) => r.lo === lo && r.hi === hi);
-  return `${lo}–${hi} · ${region?.name ?? ""}`;
-}
-
-// ── Chart types ──
-
-interface RentBin {
-  label: string; // "$400" — lower bound only, used as X axis tick
-  fullLabel: string; // "$400–$450" — used in tooltips
-  midpoint: number;
-  total: number;
-  avg: number; // actual avg weekly rent of records in this bin
-  byGroup: Record<string, number>;
-  avgByGroup: Record<string, number>;
-}
 
 // ── Staggered X-axis tick (Recharts custom tick API) ──
 // Alternates labels between two vertical positions so more fit without overlap.
@@ -705,63 +303,6 @@ function BubbleMatrix({ bins, groupKeys, groupBy }: BubbleMatrixProps) {
   );
 }
 
-// ── Theme Dropdown ──
-
-const THEME_OPTIONS: { value: ThemeMode; label: string; icon: React.ReactNode }[] = [
-  { value: "light", label: "Light", icon: <Sun size={14} /> },
-  { value: "dark", label: "Dark", icon: <Moon size={14} /> },
-  { value: "system", label: "System", icon: <Monitor size={14} /> },
-];
-
-function ThemeDropdown({ mode, onChange }: { mode: ThemeMode; onChange: (m: ThemeMode) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  const current = THEME_OPTIONS.find((o) => o.value === mode)!;
-
-  return (
-    <div className="relative shrink-0" ref={ref}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-colors cursor-pointer text-sm font-medium"
-      >
-        {current.icon}
-        <span>{current.label}</span>
-        <ChevronDown size={12} className={`ml-0.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-[calc(100%+6px)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 py-1 min-w-[130px]">
-          {THEME_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => {
-                onChange(opt.value);
-                setOpen(false);
-              }}
-              className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-left transition-colors cursor-pointer ${
-                mode === opt.value
-                  ? "text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-950/60"
-                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              }`}
-            >
-              {opt.icon}
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Main App ──
 
 export default function App() {
@@ -856,46 +397,11 @@ export default function App() {
     });
   }, []);
 
-  const filtered = useMemo(() => {
-    return data.filter((r) => {
-      if (filters.dwellingTypes.length > 0 && !filters.dwellingTypes.includes(r.dwellingType)) return false;
-      if (filters.bedrooms.length > 0) {
-        if (r.bedrooms == null) return false;
-        const match = filters.bedrooms.some((b) => (b >= 5 ? r.bedrooms! >= 5 : r.bedrooms === b));
-        if (!match) return false;
-      }
-      if (filters.postcodes.length > 0 && !filters.postcodes.includes(r.postcode)) return false;
-      if (r.weeklyRent < filters.rentMin) return false;
-      if (filters.rentMax < RENT_ABS_MAX && r.weeklyRent > filters.rentMax) return false;
-      return true;
-    });
-  }, [data, filters]);
+  const filtered = useMemo(() => filterBonds(data, filters), [data, filters]);
 
-  const sorted = useMemo(() => {
-    return [...filtered].sort((a, b) => {
-      let cmp = 0;
-      const av = a[sortField];
-      const bv = b[sortField];
-      if (av == null && bv == null) cmp = 0;
-      else if (av == null) cmp = 1;
-      else if (bv == null) cmp = -1;
-      else if (typeof av === "string" && typeof bv === "string") cmp = av.localeCompare(bv);
-      else cmp = (av as number) - (bv as number);
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-  }, [filtered, sortField, sortDir]);
+  const sorted = useMemo(() => sortBonds(filtered, sortField, sortDir), [filtered, sortField, sortDir]);
 
-  const grouped = useMemo(() => {
-    if (groupBy === "none") return null;
-    const map = new Map<string, RentalBond[]>();
-    for (const r of sorted) {
-      const key = String(r[groupBy]);
-      const arr = map.get(key);
-      if (arr) arr.push(r);
-      else map.set(key, [r]);
-    }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
-  }, [sorted, groupBy]);
+  const grouped = useMemo(() => groupBonds(sorted, groupBy), [sorted, groupBy]);
 
   const stats = useMemo(() => {
     if (filtered.length === 0) return null;
@@ -1206,12 +712,6 @@ export default function App() {
         )}
       </>
     );
-  }
-
-  function groupStats(items: RentalBond[]) {
-    const rents = items.map((r) => r.weeklyRent);
-    const avg = rents.reduce((s, v) => s + v, 0) / rents.length;
-    return { avg, median: median(rents) };
   }
 
   if (loading)
