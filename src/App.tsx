@@ -1,314 +1,43 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { RentalBond, Filters, GroupByField, SortField, SortDir, ThemeMode, RentBin } from "./types";
 import { DWELLING_TYPE_LABELS, BEDROOM_OPTIONS, MONTH_CATALOG } from "./types";
 import {
-  RENT_STEP,
   RENT_ABS_MIN,
   RENT_ABS_MAX,
-  PAGE_SIZE,
-  CHART_COLORS,
   CHART_BIN_COUNT,
   THEME_STORAGE_KEY,
   applyDarkClass,
   median,
   formatCurrency,
   groupLabel,
-  logDataStats,
-  parseXlsxData,
   getPostcodeRegion,
-  formatPostcodeRegionKey,
   groupStats,
   filterBonds,
   sortBonds,
   groupBonds,
 } from "./utils";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  ScatterChart,
-  Scatter,
-  ZAxis,
-} from "recharts";
-import { MultiSelect } from "./components/MultiSelect";
-import { TagInput } from "./components/TagInput";
-import { RangeSlider } from "./components/RangeSlider";
+import { useRentalData } from "./hooks/useRentalData";
+import { HistogramChart, BubbleMatrix } from "./components/Charts";
+import { DataTable } from "./components/DataTable";
+import { FilterPanel } from "./components/FilterPanel";
+import { StatsPanel } from "./components/StatsPanel";
 import { ThemeDropdown } from "./components/ThemeDropdown";
 import "./App.css";
 
-// ── Staggered X-axis tick (Recharts custom tick API) ──
-// Alternates labels between two vertical positions so more fit without overlap.
-
-function StaggeredXTick({
-  x = 0,
-  y = 0,
-  payload,
-  index = 0,
-}: {
-  x?: number;
-  y?: number;
-  payload?: { value: string };
-  index?: number;
-}) {
-  const dy = index % 2 === 0 ? 12 : 26;
-  return (
-    <text x={x} y={y + dy} textAnchor="middle" fill="#6b7280" fontSize={11}>
-      {payload?.value}
-    </text>
-  );
-}
-
-// ── HistogramChart ──
-
-interface HistogramChartProps {
-  bins: RentBin[];
-  groupKeys: string[];
-  groupBy: GroupByField;
-}
-
-function HistogramChart({ bins, groupKeys, groupBy }: HistogramChartProps) {
-  const grouped = groupBy !== "none" && groupBy !== "postcode" && groupKeys.length > 0;
-
-  const data = bins.map((b) => {
-    const entry: Record<string, number | string> = {
-      label: b.label,
-      fullLabel: b.fullLabel,
-      avg: b.avg,
-    };
-    if (grouped) {
-      groupKeys.forEach((k) => {
-        entry[k] = b.byGroup[k] ?? 0;
-        entry[`avg_${k}`] = b.avgByGroup[k] ?? 0;
-      });
-    } else {
-      entry["count"] = b.total;
-    }
-    return entry;
-  });
-
-  const formatGroupLabel = (key: string) => {
-    if (groupBy === "dwellingType") return DWELLING_TYPE_LABELS[key] ?? key;
-    if (groupBy === "bedrooms") {
-      if (key === "null") return "Unknown";
-      return key === "0" ? "Studio" : `${key} Bed`;
-    }
-    if (groupBy === "postcode") return formatPostcodeRegionKey(key);
-    return key;
-  };
-
-  // Show ~10 evenly spaced ticks on the X axis
-  const xInterval = Math.max(0, Math.floor(bins.length / 10) - 1);
-
-  // Track container width to decide whether to stagger labels
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(9999);
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => {
-      setContainerWidth(entry.contentRect.width);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const stagger = containerWidth < 640;
-
-  return (
-    <div ref={containerRef}>
-      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Rent Distribution</h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-          <XAxis
-            dataKey="label"
-            tick={stagger ? <StaggeredXTick /> : { fontSize: 11, fill: "#6b7280" }}
-            interval={xInterval}
-            height={stagger ? 44 : 28}
-          />
-          <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} width={48} />
-          <Tooltip
-            contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
-            content={({ active, payload, label }) => {
-              if (!active || !payload?.length) return null;
-              const bin = bins.find((b) => b.label === label);
-              return (
-                <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow text-xs space-y-1">
-                  <p className="font-semibold text-gray-700">{bin?.fullLabel ?? label}</p>
-                  {grouped
-                    ? payload.map((p) => {
-                        const gk = String(p.dataKey);
-                        const avg = bin?.avgByGroup[gk];
-                        return (
-                          <p key={gk} style={{ color: p.color }}>
-                            {formatGroupLabel(gk)}: {Number(p.value).toLocaleString()}
-                            {avg ? ` — $${avg.toLocaleString()} (avg)` : ""}
-                          </p>
-                        );
-                      })
-                    : (() => {
-                        const p = payload[0];
-                        return (
-                          <p className="text-indigo-600">
-                            {Number(p?.value ?? 0).toLocaleString()} properties
-                            {bin?.avg ? ` — $${bin.avg.toLocaleString()} (avg)` : ""}
-                          </p>
-                        );
-                      })()}
-                </div>
-              );
-            }}
-          />
-          {grouped && <Legend formatter={formatGroupLabel} wrapperStyle={{ fontSize: 12, paddingTop: 4 }} />}
-          {grouped ? (
-            groupKeys.map((k, i) => (
-              <Line
-                key={k}
-                type="monotone"
-                dataKey={k}
-                stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-            ))
-          ) : (
-            <Line type="monotone" dataKey="count" stroke="#4f46e5" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-          )}
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-// ── BubbleMatrix ──
-
-interface BubbleMatrixProps {
-  bins: RentBin[];
-  groupKeys: string[];
-  groupBy: GroupByField;
-}
-
-function BubbleMatrix({ bins, groupKeys, groupBy }: BubbleMatrixProps) {
-  const formatGroupLabel = (key: string) => {
-    if (groupBy === "dwellingType") return DWELLING_TYPE_LABELS[key] ?? key;
-    if (groupBy === "bedrooms") {
-      if (key === "null") return "Unknown";
-      return key === "0" ? "Studio" : `${key} Bed`;
-    }
-    if (groupBy === "postcode") return formatPostcodeRegionKey(key);
-    return key;
-  };
-
-  const maxCount = useMemo(() => {
-    let m = 0;
-    bins.forEach((b) =>
-      groupKeys.forEach((k) => {
-        if ((b.byGroup[k] ?? 0) > m) m = b.byGroup[k] ?? 0;
-      }),
-    );
-    return m;
-  }, [bins, groupKeys]);
-
-  const scatterData = useMemo(
-    () =>
-      groupKeys.map((key, yi) =>
-        bins
-          .map((b) => ({
-            x: b.midpoint,
-            y: yi,
-            z: b.byGroup[key] ?? 0,
-            label: b.label,
-            fullLabel: b.fullLabel,
-            avg: b.avgByGroup[key] ?? 0,
-            group: key,
-          }))
-          .filter((d) => d.z > 0),
-      ),
-    [bins, groupKeys],
-  );
-
-  const yTicks = groupKeys.map((_, i) => i);
-  const yTickFormatter = (i: number) => formatGroupLabel(groupKeys[i] ?? "");
-
-  // Derive step from consecutive midpoints so we can display lower bounds
-  const binStep = bins.length >= 2 ? bins[1].midpoint - bins[0].midpoint : 0;
-
-  // Show ~10 evenly spaced X ticks
-  const allMidpoints = bins.map((b) => b.midpoint);
-  const xTickInterval = Math.max(1, Math.floor(allMidpoints.length / 10));
-  const xTicks = allMidpoints.filter((_, i) => i % xTickInterval === 0);
-
-  return (
-    <div>
-      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Rent vs Category Bubble Matrix</h3>
-      <ResponsiveContainer width="100%" height={Math.max(200, groupKeys.length * 44 + 80)}>
-        <ScatterChart margin={{ top: 8, right: 24, left: 8, bottom: 60 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis
-            type="number"
-            dataKey="x"
-            name="Rent"
-            domain={["dataMin", "dataMax"]}
-            ticks={xTicks}
-            tickFormatter={(v: number) => `$${Math.round(v - binStep / 2)}`}
-            tick={{ fontSize: 11, fill: "#6b7280" }}
-            height={28}
-          />
-          <YAxis
-            type="number"
-            dataKey="y"
-            name="Category"
-            ticks={yTicks}
-            tickFormatter={yTickFormatter}
-            tick={{ fontSize: 11, fill: "#6b7280" }}
-            width={groupBy === "postcode" ? 200 : 90}
-            domain={[-0.5, groupKeys.length - 0.5]}
-          />
-          <ZAxis type="number" dataKey="z" range={[30, Math.min(2400, maxCount * 4 + 60)]} />
-          <Tooltip
-            cursor={false}
-            content={({ payload }) => {
-              if (!payload?.length) return null;
-              const d = payload[0]?.payload as
-                | { x: number; fullLabel: string; group: string; z: number; avg: number }
-                | undefined;
-              if (!d) return null;
-              return (
-                <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow text-xs space-y-0.5">
-                  <p className="font-semibold text-gray-800">{formatGroupLabel(d.group)}</p>
-                  <p className="text-gray-500">{d.fullLabel}</p>
-                  <p className="text-indigo-600 font-semibold">{d.z.toLocaleString()} properties</p>
-                  {d.avg > 0 && <p className="text-gray-500">${d.avg.toLocaleString()} (avg)</p>}
-                </div>
-              );
-            }}
-          />
-          {scatterData.map((points, i) => (
-            <Scatter
-              key={groupKeys[i]}
-              name={formatGroupLabel(groupKeys[i])}
-              data={points}
-              fill={CHART_COLORS[i % CHART_COLORS.length]}
-              fillOpacity={0.75}
-            />
-          ))}
-        </ScatterChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-// ── Main App ──
-
 export default function App() {
-  const [data, setData] = useState<RentalBond[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data,
+    loading,
+    error,
+    setError,
+    selectedMonth,
+    localMonths,
+    downloading,
+    handleMonthChange,
+    handleDownload,
+    handleCancelDownload,
+  } = useRentalData();
+
   const [filters, setFilters] = useState<Filters>({
     dwellingTypes: [],
     bedrooms: [],
@@ -322,18 +51,13 @@ export default function App() {
   const [sortField, setSortField] = useState<SortField>("weeklyRent");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [selectedMonth, setSelectedMonth] = useState("2025-01");
-  const [localMonths, setLocalMonths] = useState<Set<string>>(new Set());
-  const [downloading, setDownloading] = useState(false);
   const [pageSize, setPageSize] = useState(10);
   const [viewTab, setViewTab] = useState<"table" | "graphs">("table");
-  const abortRef = useRef<AbortController | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const stored = localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode | null;
     return stored ?? "system";
   });
 
-  // Re-apply when system preference changes (only relevant in "system" mode)
   useEffect(() => {
     if (themeMode !== "system") return;
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
@@ -343,59 +67,10 @@ export default function App() {
   }, [themeMode]);
 
   function handleThemeChange(mode: ThemeMode) {
-    applyDarkClass(mode); // synchronous DOM update
+    applyDarkClass(mode);
     localStorage.setItem(THEME_STORAGE_KEY, mode);
     setThemeMode(mode);
   }
-
-  useEffect(() => {
-    async function init() {
-      let available: Set<string>;
-
-      if (import.meta.env.PROD) {
-        // In production, read the pre-built manifest written by `pnpm download-all`.
-        const res = await fetch(`${import.meta.env.BASE_URL}available-months.json`);
-        const keys: string[] = res.ok ? await res.json() : [];
-        available = new Set(keys);
-      } else {
-        // In development, probe each month via HEAD to discover which JSON
-        // files have been saved to public/ so far.
-        const checks = await Promise.all(
-          MONTH_CATALOG.map(async (m) => {
-            try {
-              const res = await fetch(`${import.meta.env.BASE_URL}rental-bonds-${m.key}.json`, {
-                method: "HEAD",
-              });
-              const ct = res.headers.get("content-type") ?? "";
-              return res.ok && ct.includes("application/json") ? m.key : null;
-            } catch {
-              return null;
-            }
-          }),
-        );
-        available = new Set(checks.filter((k): k is string => k != null));
-      }
-
-      setLocalMonths(available);
-
-      // Load the most recent available month as the default dataset.
-      const defaultKey = MONTH_CATALOG.find((m) => available.has(m.key))?.key ?? null;
-      if (defaultKey) {
-        setSelectedMonth(defaultKey);
-        const r = await fetch(`${import.meta.env.BASE_URL}rental-bonds-${defaultKey}.json`);
-        const ct = r.headers.get("content-type") ?? "";
-        const defaultData: RentalBond[] = r.ok && ct.includes("application/json") ? await r.json() : [];
-        logDataStats(`init — rental-bonds-${defaultKey}.json`, defaultData);
-        setData(defaultData);
-      }
-
-      setLoading(false);
-    }
-    init().catch((e) => {
-      setError(e instanceof Error ? e.message : "Unknown error");
-      setLoading(false);
-    });
-  }, []);
 
   const filtered = useMemo(() => filterBonds(data, filters), [data, filters]);
 
@@ -415,13 +90,11 @@ export default function App() {
     };
   }, [filtered]);
 
-  // Postcode is handled via region bucketing in the binning step
   const chartGroupBy: GroupByField = groupBy;
 
   const { chartBins, chartGroupKeys } = useMemo(() => {
     if (filtered.length === 0) return { chartBins: [], chartGroupKeys: [] };
 
-    // Exclude nonsensical bedroom counts (>10) from chart data
     const chartData = filtered.filter((r) => r.bedrooms === null || r.bedrooms <= 10);
     if (chartData.length === 0) return { chartBins: [], chartGroupKeys: [] };
 
@@ -445,7 +118,6 @@ export default function App() {
       });
     }
 
-    // Accumulate sums to compute averages
     const sumTotal: number[] = new Array(bins.length).fill(0);
     const sumByGroup: Record<string, number[]> = {};
 
@@ -472,7 +144,6 @@ export default function App() {
       }
     }
 
-    // Compute averages
     bins.forEach((b, i) => {
       b.avg = b.total > 0 ? Math.round(sumTotal[i] / b.total) : 0;
       for (const gk of Object.keys(b.byGroup)) {
@@ -547,173 +218,6 @@ export default function App() {
     });
   }
 
-  async function handleMonthChange(monthKey: string) {
-    setSelectedMonth(monthKey);
-    if (localMonths.has(monthKey)) {
-      try {
-        const res = await fetch(`${import.meta.env.BASE_URL}rental-bonds-${monthKey}.json`);
-        if (!res.ok) throw new Error("Failed to load data");
-        const d: RentalBond[] = await res.json();
-        logDataStats(`handleMonthChange — rental-bonds-${monthKey}.json`, d);
-        setData(d);
-        setError(null);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Unknown error");
-      }
-    }
-  }
-
-  async function handleDownload() {
-    const entry = MONTH_CATALOG.find((m) => m.key === selectedMonth);
-    if (!entry) return;
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setDownloading(true);
-    try {
-      const res = await fetch(entry.url, { signal: controller.signal });
-      if (!res.ok) throw new Error(`Download failed (${res.status})`);
-      const buffer = await res.arrayBuffer();
-      const parsed = parseXlsxData(buffer);
-      logDataStats(`handleDownload — ${selectedMonth}`, parsed);
-      await fetch("/api/save-json", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filename: `rental-bonds-${selectedMonth}.json`,
-          data: parsed,
-        }),
-        signal: controller.signal,
-      });
-      setData(parsed);
-      setLocalMonths((prev) => new Set([...prev, selectedMonth]));
-      setError(null);
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") return;
-      setError(e instanceof Error ? e.message : "Download failed");
-    } finally {
-      setDownloading(false);
-      abortRef.current = null;
-    }
-  }
-
-  function handleCancelDownload() {
-    abortRef.current?.abort();
-    setDownloading(false);
-  }
-
-  const sortIndicator = (field: SortField) => (sortField === field ? (sortDir === "asc" ? " ↑" : " ↓") : "");
-
-  function renderTable(items: RentalBond[], paginate: boolean) {
-    const start = paginate ? page * pageSize : 0;
-    const pageItems = paginate ? items.slice(start, start + pageSize) : items.slice(0, PAGE_SIZE);
-    const totalPages = paginate ? Math.ceil(items.length / pageSize) : 1;
-
-    return (
-      <>
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              <th
-                className={`sticky top-0 bg-indigo-50 dark:bg-indigo-950 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 dark:border-indigo-900 cursor-pointer select-none transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 ${sortField === "lodgementDate" ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400"}`}
-                onClick={() => toggleSort("lodgementDate")}
-              >
-                Date{sortIndicator("lodgementDate")}
-              </th>
-              <th
-                className={`sticky top-0 bg-indigo-50 dark:bg-indigo-950 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 dark:border-indigo-900 cursor-pointer select-none transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 ${sortField === "postcode" ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400"}`}
-                onClick={() => toggleSort("postcode")}
-              >
-                Postcode{sortIndicator("postcode")}
-              </th>
-              <th
-                className={`sticky top-0 bg-indigo-50 dark:bg-indigo-950 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 dark:border-indigo-900 cursor-pointer select-none transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 ${sortField === "dwellingType" ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400"}`}
-                onClick={() => toggleSort("dwellingType")}
-              >
-                Type{sortIndicator("dwellingType")}
-              </th>
-              <th
-                className={`sticky top-0 bg-indigo-50 dark:bg-indigo-950 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 dark:border-indigo-900 cursor-pointer select-none transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 ${sortField === "bedrooms" ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400"}`}
-                onClick={() => toggleSort("bedrooms")}
-              >
-                Beds{sortIndicator("bedrooms")}
-              </th>
-              <th
-                className={`sticky top-0 bg-indigo-50 dark:bg-indigo-950 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide border-b border-indigo-100 dark:border-indigo-900 cursor-pointer select-none transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 ${sortField === "weeklyRent" ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400"}`}
-                onClick={() => toggleSort("weeklyRent")}
-              >
-                Weekly Rent{sortIndicator("weeklyRent")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageItems.map((r, i) => (
-              <tr
-                key={start + i}
-                className={`hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 ${(start + i) % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50/70 dark:bg-gray-800/50"}`}
-              >
-                <td className="px-4 py-2.5 text-sm border-b border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300">
-                  {r.lodgementDate}
-                </td>
-                <td className="px-4 py-2.5 text-sm border-b border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300">
-                  {r.postcode}
-                </td>
-                <td className="px-4 py-2.5 text-sm border-b border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300">
-                  {DWELLING_TYPE_LABELS[r.dwellingType] ?? r.dwellingType}
-                </td>
-                <td className="px-4 py-2.5 text-sm border-b border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300">
-                  {r.bedrooms == null ? "–" : r.bedrooms === 0 ? "Studio" : r.bedrooms}
-                </td>
-                <td className="px-4 py-2.5 text-sm border-b border-gray-100 dark:border-gray-800 font-semibold tabular-nums text-gray-900 dark:text-gray-100">
-                  {formatCurrency(r.weeklyRent)}/wk
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {paginate && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
-            <div className="w-28" />
-            <div className="flex items-center gap-2">
-              <button
-                disabled={page === 0}
-                onClick={() => setPage((p) => p - 1)}
-                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm cursor-pointer transition-colors hover:enabled:bg-gray-100 dark:hover:enabled:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              {totalPages > 1 && (
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  Page {page + 1} of {totalPages}
-                </span>
-              )}
-              <button
-                disabled={page >= totalPages - 1}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm cursor-pointer transition-colors hover:enabled:bg-gray-100 dark:hover:enabled:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
-            <div className="relative w-28 flex justify-end">
-              <select
-                value={pageSize}
-                onChange={(e) => setPageSize(Number(e.target.value))}
-                className="appearance-none pl-3 pr-7 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 cursor-pointer transition-colors hover:border-gray-400 dark:hover:border-gray-500 focus:outline-none focus:border-indigo-600"
-              >
-                <option value={10}>10 rows</option>
-                <option value={20}>20 rows</option>
-                <option value={50}>50 rows</option>
-              </select>
-              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[0.6rem] text-gray-400 dark:text-gray-500">
-                &#9660;
-              </span>
-            </div>
-          </div>
-        )}
-      </>
-    );
-  }
-
   if (loading)
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white dark:bg-gray-950 text-gray-500 dark:text-gray-400">
@@ -721,16 +225,6 @@ export default function App() {
         Loading rental bond data...
       </div>
     );
-
-  const dwellingOptions = Object.entries(DWELLING_TYPE_LABELS).map(([code, label]) => ({
-    value: code,
-    label,
-  }));
-
-  const bedroomSelectOptions = BEDROOM_OPTIONS.map((b) => ({
-    value: String(b.value),
-    label: b.label,
-  }));
 
   return (
     <>
@@ -802,94 +296,14 @@ export default function App() {
             </div>
           )}
 
-          <div className="bg-white dark:bg-gray-900 rounded-xl mb-5 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div
-              className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl"
-              onClick={() => setFiltersOpen((o) => !o)}
-            >
-              <div className="flex items-center gap-2.5">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Filters
-                </h2>
-                {hasActiveFilters && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400" />
-                    Active
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {hasActiveFilters && (
-                  <button
-                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      resetFilters();
-                    }}
-                  >
-                    Reset
-                  </button>
-                )}
-                <span className="flex items-center justify-center w-7 h-7 rounded-md text-gray-400 dark:text-gray-500 text-[0.7rem] cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300">
-                  <span className={`inline-block transition-transform duration-200 ${filtersOpen ? "rotate-90" : ""}`}>
-                    &#9654;
-                  </span>
-                </span>
-              </div>
-            </div>
-            <div className={`filters-body ${filtersOpen ? "open" : "closed"}`}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
-                    Dwelling Type
-                  </label>
-                  <MultiSelect
-                    options={dwellingOptions}
-                    selected={filters.dwellingTypes}
-                    onChange={(v) => setFilters((f) => ({ ...f, dwellingTypes: v }))}
-                    placeholder="All types"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
-                    Bedrooms
-                  </label>
-                  <MultiSelect
-                    options={bedroomSelectOptions}
-                    selected={filters.bedrooms.map(String)}
-                    onChange={(v) => setFilters((f) => ({ ...f, bedrooms: v.map(Number) }))}
-                    placeholder="Any"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
-                    Postcode
-                  </label>
-                  <TagInput
-                    tags={filters.postcodes}
-                    onChange={(postcodes) => setFilters((f) => ({ ...f, postcodes }))}
-                    placeholder="Type postcode + Enter"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pl-0.5">
-                    Weekly Rent
-                  </label>
-                  <RangeSlider
-                    min={RENT_ABS_MIN}
-                    max={RENT_ABS_MAX}
-                    step={RENT_STEP}
-                    valueMin={filters.rentMin}
-                    valueMax={filters.rentMax}
-                    onChange={(rentMin, rentMax) => setFilters((f) => ({ ...f, rentMin, rentMax }))}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+          <FilterPanel
+            filters={filters}
+            onFiltersChange={setFilters}
+            filtersOpen={filtersOpen}
+            onToggleOpen={() => setFiltersOpen((o) => !o)}
+            hasActiveFilters={hasActiveFilters}
+            onReset={resetFilters}
+          />
 
           {data.length === 0 ? (
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center py-16 px-8 text-center">
@@ -911,41 +325,7 @@ export default function App() {
             </div>
           ) : (
             <>
-              <div className="bg-white dark:bg-gray-900 rounded-xl px-5 py-4 mb-5 shadow-sm border border-gray-200 dark:border-gray-700">
-                <div className="mb-3">
-                  <h3 className="text-base font-semibold text-gray-700 dark:text-gray-300">
-                    Summary for <span className="text-indigo-600 dark:text-indigo-400">{filterSummary}</span>
-                  </h3>
-                </div>
-                {stats && (
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-indigo-50 dark:bg-indigo-950/60 rounded-lg px-4 py-3.5 border border-indigo-100 dark:border-indigo-900">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
-                        Min Rent
-                      </div>
-                      <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                        {formatCurrency(stats.min)}/wk
-                      </div>
-                    </div>
-                    <div className="bg-indigo-50 dark:bg-indigo-950/60 rounded-lg px-4 py-3.5 border border-indigo-100 dark:border-indigo-900">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
-                        Avg Rent
-                      </div>
-                      <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                        {formatCurrency(stats.avg)}/wk
-                      </div>
-                    </div>
-                    <div className="bg-indigo-50 dark:bg-indigo-950/60 rounded-lg px-4 py-3.5 border border-indigo-100 dark:border-indigo-900">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
-                        Max Rent
-                      </div>
-                      <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                        {formatCurrency(stats.max)}/wk
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <StatsPanel stats={stats} filterSummary={filterSummary} />
 
               <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700">
                 {/* Card header */}
@@ -1019,12 +399,34 @@ export default function App() {
                               <span className="whitespace-nowrap">Median {formatCurrency(s.median)}/wk</span>
                             </div>
                           </div>
-                          {isOpen && renderTable(items, false)}
+                          {isOpen && (
+                            <DataTable
+                              items={items}
+                              paginate={false}
+                              page={0}
+                              pageSize={pageSize}
+                              sortField={sortField}
+                              sortDir={sortDir}
+                              onPageChange={setPage}
+                              onPageSizeChange={setPageSize}
+                              onSort={toggleSort}
+                            />
+                          )}
                         </div>
                       );
                     })
                   ) : (
-                    renderTable(sorted, true)
+                    <DataTable
+                      items={sorted}
+                      paginate={true}
+                      page={page}
+                      pageSize={pageSize}
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onPageChange={setPage}
+                      onPageSizeChange={setPageSize}
+                      onSort={toggleSort}
+                    />
                   )
                 ) : (
                   <div className="p-5 space-y-8 bg-white dark:bg-gray-900">
