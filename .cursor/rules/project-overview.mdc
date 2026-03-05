@@ -20,31 +20,52 @@ No routing library, no state management library, no component library. All UI co
 
 ```
 src/
-  main.tsx          # React entry point (renders <App />)
-  App.tsx           # All components and app logic (~680 lines)
-  App.css           # @import "tailwindcss" + minimal custom CSS
-  types.ts          # TypeScript interfaces and constants
+  main.tsx                    # React entry point (renders <App />)
+  App.tsx                     # Top-level orchestrator (~460 lines) — state, useMemo chains, layout
+  App.css                     # @import "tailwindcss" + minimal custom CSS
+  types.ts                    # TypeScript interfaces and constants
+  utils.ts                    # Pure helper functions, constants, data transforms
+  hooks/
+    useRentalData.ts          # Data loading, month switching, XLSX download
+  components/
+    Charts.tsx                # HistogramChart, BubbleMatrix (Recharts-based)
+    DataTable.tsx             # Sortable table with pagination
+    FilterPanel.tsx           # Collapsible filter panel (composes MultiSelect, TagInput, RangeSlider)
+    StatsPanel.tsx            # Min / Avg / Max summary cards
+    MultiSelect.tsx           # Custom dropdown with checkboxes
+    TagInput.tsx              # Text input that converts values into removable tag pills
+    RangeSlider.tsx           # Dual-handle range slider
+    ThemeDropdown.tsx         # Light / Dark / System theme picker
+  __tests__/                  # Vitest unit tests for components and utils
+e2e/
+  app.spec.ts                 # Playwright E2E tests
 public/
-  rental-bonds.json # Dataset: 29,616 records, ~3.1 MB
-index.html          # HTML shell
-vite.config.js      # Vite + React + Tailwind plugins
+  rental-bonds-*.json         # Dataset per month (~30k records each, ~3 MB)
+index.html                    # HTML shell
+vite.config.js                # Vite + React + Tailwind plugins
+playwright.config.ts          # Playwright config (auto-starts dev server)
 ```
 
 ## Data source
 
-NSW Fair Trading Rental Bond Lodgements (January 2025), converted from XLSX to JSON. Each record has: `lodgementDate` (string), `postcode` (number), `dwellingType` (string: F/H/T/O/R/U), `bedrooms` (number | null), `weeklyRent` (number). Loaded via `fetch("/rental-bonds.json")` on mount.
+NSW Fair Trading Rental Bond Lodgements, one XLSX file per month converted to JSON. Each record has: `lodgementDate` (string), `postcode` (number), `dwellingType` (string: F/H/T/O/R/U), `bedrooms` (number | null), `weeklyRent` (number). Loaded via `fetch` on mount; the available months are discovered from a manifest in production or probed via HEAD in dev.
 
-## Architecture (src/App.tsx)
+## Architecture
 
-Everything lives in one file. Three inline sub-components + the main App component:
+**App.tsx** is the orchestrator: it owns filter/sort/group/page/theme state, computes derived data via `useMemo` chains (`filtered` -> `sorted` -> `grouped`, plus `stats`, `chartBins`, `hasActiveFilters`, `filterSummary`), and composes the extracted components.
 
-- **MultiSelect** — Custom dropdown with checkboxes for multi-select. Uses `useRef` + `mousedown` listener for outside-click-to-close.
-- **TagInput** — Text input that converts typed values into removable tag pills on Enter/comma.
-- **RangeSlider** — Dual-handle range slider using two overlaid `<input type="range">` elements.
+**useRentalData hook** encapsulates data lifecycle: init loading, month discovery, month switching, and XLSX download/parse.
 
-**App state**: `data`, `filters`, `filtersOpen`, `groupBy`, `page`, `sortField`, `sortDir`, `expandedGroups`.
+**Components** are presentational with props-based APIs:
 
-**Key computed values (useMemo)**: `filtered` -> `sorted` -> `grouped`, plus `stats`, `hasActiveFilters`, `filterSummary`.
+- **FilterPanel** — collapsible panel composing MultiSelect, TagInput, RangeSlider
+- **DataTable** — sortable table with pagination controls
+- **StatsPanel** — min/avg/max summary cards
+- **Charts** — HistogramChart (line chart) and BubbleMatrix (scatter chart) using Recharts
+- **MultiSelect** — custom dropdown with checkboxes; outside-click-to-close via `useRef` + `mousedown`
+- **TagInput** — text input converting typed values into removable tag pills on Enter/comma
+- **RangeSlider** — dual-handle range slider using two overlaid `<input type="range">` elements
+- **ThemeDropdown** — light/dark/system theme picker with outside-click-to-close
 
 ## Styling approach
 
@@ -61,6 +82,7 @@ Everything lives in one file. Three inline sub-components + the main App compone
 ## Conventions
 
 - No external component or UI libraries — build custom components
-- Keep all components in `src/App.tsx` unless extracting to a separate file is explicitly requested
+- Each component lives in its own file under `src/components/`; hooks under `src/hooks/`
+- `App.tsx` is the orchestrator — state management and layout composition only
 - Use Tailwind utility classes for styling; only add custom CSS in `App.css` when Tailwind cannot express it (vendor pseudo-elements, keyframe animations, compound state selectors)
-- Types and constants go in `src/types.ts`
+- Types and constants go in `src/types.ts`; pure functions and shared constants go in `src/utils.ts`
